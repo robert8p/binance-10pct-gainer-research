@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="refresh" content="30">
+  <title>Binance 10% Gainer Research</title>
+  <style>
+    :root{font-family:Inter,system-ui,sans-serif;color:#172033;background:#f4f6fb}body{margin:0}.wrap{max-width:1200px;margin:auto;padding:28px}header{background:#101a35;color:white;padding:28px;border-radius:18px;margin-bottom:20px}h1{margin:0 0 8px;font-size:30px}.sub{opacity:.82}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:18px}.card{background:white;border-radius:16px;padding:20px;box-shadow:0 6px 24px rgba(20,31,60,.08)}h2{margin-top:0;font-size:19px}.note{font-size:13px;color:#5b6477;background:#f6f8fc;padding:10px;border-radius:10px}label{display:block;font-size:13px;font-weight:650;margin:12px 0 5px}input,select,button{width:100%;box-sizing:border-box;padding:11px;border-radius:9px;border:1px solid #ccd3df;background:white}button{margin-top:15px;background:#1769e0;color:white;border:0;font-weight:700;cursor:pointer}table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;padding:8px;border-bottom:1px solid #e7eaf0;vertical-align:top}.status{font-weight:700}.completed{color:#16824b}.failed{color:#b42318}.running{color:#b36b00}a{color:#1769e0;text-decoration:none}.wide{grid-column:1/-1}.scroll{overflow:auto;max-height:430px}.fixed{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}</style>
+</head>
+<body><div class="wrap">
+<header><h1>Binance 10% Gainer Research</h1><div class="sub">Find saleable 10% rises within eight hours, build matched controls, and export ten-day precursor evidence.</div></header>
+{% if not configured %}<div class="card"><strong>DATABASE_URL is not configured.</strong></div>{% endif %}
+<div class="grid">
+  <section class="card"><h2>Step 1 — Scan</h2>
+    <div class="note">Fixed research definition: 10% rise above the lowest completed one-minute low in the preceding eight hours. One event per symbol per eight-hour cooldown.</div>
+    <form method="post" action="/scan">
+      <label>Lookback completed UTC days</label><input type="number" name="lookback_days" value="60" min="2" max="365">
+      <label>Historical start (optional)</label><input type="date" name="historical_start">
+      <label>Historical end, exclusive (optional)</label><input type="date" name="historical_end_exclusive">
+      <label>Minimum executed exit notional</label><input type="number" name="min_exit_notional" value="500" min="0" step="50">
+      <button>Queue 10% scan</button>
+    </form>
+  </section>
+  <section class="card"><h2>Step 2 — Matched controls</h2>
+    <form method="post" action="/controls">
+      <label>Completed scan</label><select name="scan_job_id" required><option value="">Select…</option>{% for x in scans if x.status in ['completed','completed_with_warnings'] %}<option value="{{x.id}}">{{x.window_start_date}} → {{x.window_end_date_exclusive}} · {{x.saleable_events}} saleable</option>{% endfor %}</select>
+      <label>Controls per event</label><input type="number" name="controls_per_event" value="5" min="1" max="10">
+      <button>Queue matched controls</button>
+    </form>
+  </section>
+  <section class="card"><h2>Step 3 — Ten-day context</h2>
+    <form method="post" action="/context">
+      <label>Completed control job</label><select name="control_job_id" required><option value="">Select…</option>{% for x in controls if x.status in ['completed','completed_with_warnings'] %}<option value="{{x.id}}">{{x.created_at}} · {{x.controls_created}} controls</option>{% endfor %}</select>
+      <button>Build analysis package</button>
+    </form>
+    <div class="note" style="margin-top:12px">Predictors end before each snapshot. Outcomes remain separate from the feature table.</div>
+  </section>
+  <section class="card wide"><h2>Scan jobs</h2><div class="scroll"><table><tr><th>Created</th><th>Period</th><th>Status</th><th>Progress</th><th>Events</th><th>Saleable</th><th>Failures</th></tr>{% for x in scans %}<tr><td>{{x.created_at}}</td><td>{{x.window_start_date}} → {{x.window_end_date_exclusive}}</td><td class="status {{x.status}}">{{x.status}}</td><td>{{x.symbols_processed}} / {{x.symbols_total}}</td><td>{{x.events_found}}</td><td>{{x.saleable_events}}</td><td>{{x.failures}}{% if x.status == 'failed' %}<form method="post" action="/retry/scan/{{x.id}}"><button style="padding:5px;margin-top:4px">Retry</button></form>{% endif %}</td></tr>{% endfor %}</table></div></section>
+  <section class="card wide"><h2>Downstream jobs and files</h2><div class="scroll"><table><tr><th>Type</th><th>Created</th><th>Status/file</th><th>Progress</th></tr>{% for x in controls %}<tr><td>Controls</td><td>{{x.created_at}}</td><td class="status {{x.status}}">{{x.status}}</td><td>{{x.events_processed}} events · {{x.controls_created}} controls{% if x.status == 'failed' %}<form method="post" action="/retry/controls/{{x.id}}"><button style="padding:5px;margin-top:4px">Retry</button></form>{% endif %}</td></tr>{% endfor %}{% for x in contexts %}<tr><td>Context</td><td>{{x.created_at}}</td><td class="status {{x.status}}">{{x.status}}</td><td>{{x.events_processed}} events · {{x.feature_rows}} feature rows{% if x.status == 'failed' %}<form method="post" action="/retry/context/{{x.id}}"><button style="padding:5px;margin-top:4px">Retry</button></form>{% endif %}</td></tr>{% endfor %}{% for x in files %}<tr><td>Download</td><td>{{x.created_at}}</td><td><a href="/download/{{x.id}}">{{x.filename}}</a><br><small>{{x.role}}</small></td><td class="fixed">{{x.sha256[:16]}}…</td></tr>{% endfor %}</table></div></section>
+</div></div></body></html>

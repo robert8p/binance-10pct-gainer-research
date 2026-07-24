@@ -1,0 +1,41 @@
+services:
+  - type: web
+    name: binance-10pct-scanner-web
+    runtime: docker
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: APP_VERSION
+        value: 1.0.0
+      - key: TEMP_DATA_DIR
+        value: /tmp/binance10
+  - type: worker
+    name: binance-10pct-scanner-worker
+    runtime: docker
+    plan: pro
+    dockerCommand: python -m app.worker
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: APP_VERSION
+        value: 1.0.0
+      - key: TEMP_DATA_DIR
+        value: /var/data/binance10
+    disk:
+      name: binance10-cache
+      mountPath: /var/data
+      sizeGB: 20
