@@ -44,7 +44,8 @@ create table if not exists binance10_controls (
   id uuid primary key default gen_random_uuid(), control_job_id uuid not null references binance10_control_jobs(id) on delete cascade,
   event_id uuid not null references binance10_events(id) on delete cascade, symbol text not null,
   pseudo_baseline_time timestamptz not null, match_rank integer not null, match_score numeric not null,
-  ret_24h numeric, rv_24h numeric, qv_24h numeric, ret_8h numeric, created_at timestamptz not null default now(),
+  match_basis text, same_weekday boolean, calendar_distance_days integer,
+  created_at timestamptz not null default now(),
   unique(control_job_id,event_id,pseudo_baseline_time)
 );
 create index if not exists idx_binance10_controls_job on binance10_controls(control_job_id,event_id);
@@ -55,8 +56,16 @@ create table if not exists binance10_context_jobs (
   created_at timestamptz not null default now(), started_at timestamptz, completed_at timestamptz, heartbeat_at timestamptz,
   prior_days integer not null default 10 check (prior_days=10), protocol_version text not null,
   events_processed integer not null default 0, samples_total integer not null default 0, feature_rows integer not null default 0,
-  failures integer not null default 0, result_json jsonb, error_message text
+  raw_bar_rows bigint not null default 0, failures integer not null default 0, result_json jsonb, error_message text
 );
+
+
+
+-- Safe upgrades for projects initially created with v1.0.x.
+alter table binance10_controls add column if not exists match_basis text;
+alter table binance10_controls add column if not exists same_weekday boolean;
+alter table binance10_controls add column if not exists calendar_distance_days integer;
+alter table binance10_context_jobs add column if not exists raw_bar_rows bigint not null default 0;
 
 create table if not exists binance10_files (
   id uuid primary key default gen_random_uuid(), context_job_id uuid not null references binance10_context_jobs(id) on delete cascade,
@@ -84,4 +93,4 @@ alter table binance10_issues enable row level security;
 insert into storage.buckets(id,name,public)
 values ('binance10-research','binance10-research',false)
 on conflict (id) do update set public=false;
--- No anonymous policies are created. The app uses the server-side service-role key only.
+-- No anonymous policies are created. The app uses the server-side Supabase secret key only.

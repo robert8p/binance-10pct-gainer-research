@@ -5,16 +5,16 @@ import json
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import HTMLResponse, Response, StreamingResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.templating import Jinja2Templates
 
 from .binance import completed_window
 from .config import get_settings
 from .db import connect, fetch_all, fetch_one
-from .storage import download
+from .storage import iter_download
 
-app = FastAPI(title='Binance 10% Gainer Research', version='1.0.0')
+app = FastAPI(title='Binance 10% Gainer Research', version='1.1.0')
 templates = Jinja2Templates(directory=str(Path(__file__).parent / 'templates'))
 security = HTTPBasic(auto_error=False)
 
@@ -29,7 +29,7 @@ def auth(credentials: HTTPBasicCredentials | None = Depends(security)) -> None:
 
 @app.get('/health')
 def health() -> dict[str, str]:
-    return {'status':'ok','version':'1.0.0','event_definition':'10pct_within_8h'}
+    return {'status':'ok','version':'1.1.0','event_definition':'10pct_within_8h'}
 
 
 @app.get('/', response_class=HTMLResponse, dependencies=[Depends(auth)])
@@ -40,7 +40,7 @@ def dashboard(request: Request) -> HTMLResponse:
     contexts = fetch_all(settings, 'select * from binance10_context_jobs order by created_at desc limit 30') if settings.configured else []
     files = fetch_all(settings, 'select * from binance10_files order by created_at desc limit 30') if settings.configured else []
     return templates.TemplateResponse(request, 'index.html', {
-        'version':'1.0.0','configured':settings.configured,'scans':scans,'controls':controls,'contexts':contexts,'files':files,
+        'version':'1.1.0','configured':settings.configured,'scans':scans,'controls':controls,'contexts':contexts,'files':files,
     })
 
 
@@ -102,7 +102,7 @@ def create_context(control_job_id: str = Form(...)) -> Response:
     with connect(settings) as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "insert into binance10_context_jobs(control_job_id,status,prior_days,protocol_version) values (%s,'queued',10,'binance10_v1_context') returning id",
+                "insert into binance10_context_jobs(control_job_id,status,prior_days,protocol_version) values (%s,'queued',10,'binance10_v1_1_raw_evidence') returning id",
                 (control_job_id,),
             )
             job_id = str(cur.fetchone()['id'])
@@ -135,7 +135,7 @@ def retry_job(kind: str, job_id: str) -> Response:
                 cur.execute('delete from binance10_issues where context_job_id=%s', (job_id,))
                 cur.execute(
                     "update binance10_context_jobs set status='queued', started_at=null, completed_at=null, heartbeat_at=null, "
-                    "events_processed=0, samples_total=0, feature_rows=0, failures=0, result_json=null, error_message=null where id=%s",
+                    "events_processed=0, samples_total=0, feature_rows=0, raw_bar_rows=0, failures=0, result_json=null, error_message=null where id=%s",
                     (job_id,),
                 )
         conn.commit()
@@ -148,5 +148,8 @@ def download_file(file_id: str) -> Response:
     row = fetch_one(settings, 'select * from binance10_files where id=%s', (file_id,))
     if not row:
         raise HTTPException(404, 'File not found')
-    content = download(settings, row['storage_path'])
-    return Response(content, media_type=row['content_type'], headers={'Content-Disposition':f"attachment; filename={row['filename']}"})
+    return StreamingResponse(
+        iter_download(settings, row['storage_path']),
+        media_type=row['content_type'],
+        headers={'Content-Disposition':f"attachment; filename={row['filename']}"},
+    )

@@ -12,10 +12,10 @@ def _csv(name: str, default: str) -> tuple[str, ...]:
 
 @dataclass(frozen=True)
 class Settings:
-    app_version: str = os.getenv('APP_VERSION', '1.0.0')
+    app_version: str = os.getenv('APP_VERSION', '1.1.0')
     database_url: str = os.getenv('DATABASE_URL', '')
     supabase_url: str = os.getenv('SUPABASE_URL', '').rstrip('/')
-    supabase_service_role_key: str = os.getenv('SUPABASE_SERVICE_ROLE_KEY', '')
+    supabase_secret_key: str = os.getenv('SUPABASE_SECRET_KEY', '') or os.getenv('SUPABASE_SERVICE_ROLE_KEY', '')
     admin_password: str = os.getenv('ADMIN_PASSWORD', '')
     temp_data_dir: Path = Path(os.getenv('TEMP_DATA_DIR', '/tmp/binance10'))
     quote_assets: tuple[str, ...] = _csv('QUOTE_ASSETS', 'USDT,USDC,FDUSD')

@@ -2,27 +2,9 @@ from __future__ import annotations
 
 from collections import deque
 from datetime import datetime, timedelta
-import math
 from typing import Iterable
 
-from .features import summary_match_metrics
 from .models import Kline
-
-
-def _valid(metrics: dict[str, float | None]) -> bool:
-    return all(metrics.get(key) is not None for key in ('ret_24h', 'rv_24h', 'qv_24h', 'ret_8h'))
-
-
-def _score(a: dict[str, float | None], b: dict[str, float | None]) -> float:
-    assert _valid(a) and _valid(b)
-    qv_a = max(float(a['qv_24h']), 1.0)
-    qv_b = max(float(b['qv_24h']), 1.0)
-    return (
-        abs(float(a['ret_24h']) - float(b['ret_24h'])) / 0.03
-        + abs(float(a['rv_24h']) - float(b['rv_24h'])) / 0.02
-        + abs(math.log(qv_a / qv_b)) / 1.0
-        + abs(float(a['ret_8h']) - float(b['ret_8h'])) / 0.02
-    )
 
 
 def has_threshold_event(
@@ -31,7 +13,7 @@ def has_threshold_event(
     threshold_pct: float,
     window_minutes: int,
 ) -> bool:
-    """Conservatively reject controls near any coarse 10% crossing."""
+    """Conservatively reject controls near any coarse threshold crossing."""
     start = anchor - timedelta(minutes=window_minutes)
     end = anchor + timedelta(minutes=window_minutes)
     lookback_start = start - timedelta(minutes=window_minutes)
@@ -57,22 +39,29 @@ def has_threshold_event(
 def select_controls(
     bars: list[Kline],
     event_anchor: datetime,
-    event_metrics: dict[str, float | None],
     excluded_times: Iterable[datetime],
     controls_per_event: int = 5,
     threshold_pct: float = 10.0,
     window_minutes: int = 480,
     min_separation_days: int = 2,
 ) -> list[dict[str, object]]:
+    """Select neutral same-symbol, same-time controls without predictor matching.
+
+    The application does not decide that return, volatility, volume or another
+    engineered feature is important. Eligible controls are ranked mechanically:
+    same UTC 15-minute slot, then same weekday, then nearest calendar date.
+    """
     excluded = list(excluded_times)
     candidates: list[dict[str, object]] = []
-    # Candidate pseudo-baselines are aligned to the event's 15-minute UTC slot.
     slot_minute = (event_anchor.minute // 15) * 15
     start = bars[0].open_time + timedelta(days=10) if bars else event_anchor
     end = bars[-1].close_time - timedelta(minutes=window_minutes) if bars else event_anchor
     cursor = start.replace(hour=event_anchor.hour, minute=slot_minute, second=0, microsecond=0)
+    if cursor < start:
+        cursor += timedelta(days=1)
     while cursor < end:
-        if abs((cursor - event_anchor).total_seconds()) < min_separation_days * 86400:
+        distance_days = abs((cursor.date() - event_anchor.date()).days)
+        if distance_days < min_separation_days:
             cursor += timedelta(days=1)
             continue
         if any(abs((cursor - ts).total_seconds()) < window_minutes * 60 for ts in excluded):
@@ -81,13 +70,18 @@ def select_controls(
         if has_threshold_event(bars, cursor, threshold_pct, window_minutes):
             cursor += timedelta(days=1)
             continue
-        metrics = summary_match_metrics(bars, cursor)
-        if _valid(metrics) and _valid(event_metrics):
-            candidates.append({
-                'pseudo_baseline_time': cursor,
-                'match_score': _score(event_metrics, metrics),
-                **metrics,
-            })
+        weekday_penalty = 0 if cursor.weekday() == event_anchor.weekday() else 1
+        candidates.append({
+            'pseudo_baseline_time': cursor,
+            'match_score': weekday_penalty * 10000 + distance_days,
+            'match_basis': 'same_symbol_same_utc_slot; same_weekday_then_nearest_date',
+            'same_weekday': weekday_penalty == 0,
+            'calendar_distance_days': distance_days,
+        })
         cursor += timedelta(days=1)
-    candidates.sort(key=lambda x: (float(x['match_score']), x['pseudo_baseline_time']))
+    candidates.sort(key=lambda x: (
+        0 if x['same_weekday'] else 1,
+        int(x['calendar_distance_days']),
+        x['pseudo_baseline_time'],
+    ))
     return candidates[:controls_per_event]

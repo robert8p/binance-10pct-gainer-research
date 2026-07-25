@@ -1,32 +1,88 @@
-# Binance 10% Gainer Research App
+# Binance 10% Gainer Research App — v1.1.0
 
-A read-only Binance Spot research pipeline that finds **saleable 10% rises within eight hours**, creates matched non-event controls, and exports ten days of point-in-time precursor features for analysis.
+A read-only Binance Spot evidence pipeline for investigating **saleable 10% rises within eight hours**.
+
+## Critical design boundary
+
+The app does **not** identify precursor patterns. It does not calculate returns, volatility, volume ratios, technical indicators, machine-learning features or trading rules.
+
+Its responsibilities are limited to:
+
+1. detecting events using a fixed definition;
+2. checking historical exit liquidity;
+3. selecting neutral same-symbol non-event controls;
+4. collecting point-in-time raw exchange data;
+5. checking coverage and gaps;
+6. separating discovery, validation and sealed-test evidence; and
+7. packaging the evidence for ChatGPT.
+
+ChatGPT is responsible for deriving representations, generating hypotheses, testing them, interpreting the evidence and freezing candidate rules.
 
 ## Fixed event definition
 
-An event occurs when a completed one-minute bar's high first reaches at least **110% of the lowest low in the preceding completed 480 minutes**. The current bar's low cannot become its own baseline. A symbol then enters an eight-hour cooldown so one move is not counted repeatedly.
+An event occurs when a completed one-minute bar's high first reaches at least **110% of the lowest low in the preceding completed 480 minutes**. The crossing bar cannot provide its own baseline. A symbol then enters an eight-hour cooldown so one move is not counted repeatedly.
 
-The scan uses 15-minute bars to shortlist candidate ranges, then one-minute bars to verify the exact crossing. Saleability is tested using executed aggregate-trade quote notional during the first 300 seconds after crossing; one-minute quote volume is used only when the official daily aggregate-trade archive is not yet available.
+The scan uses 15-minute bars to shortlist candidate ranges and one-minute bars to verify them. Saleability is tested using aggregate-trade quote notional during the first 300 seconds after the exact crossing. One-minute quote volume is used only when the official daily aggregate-trade archive is unavailable.
+
+## Neutral controls
+
+For each saleable event, the app seeks up to five controls that are:
+
+- the same Binance symbol;
+- aligned to the same UTC 15-minute time slot;
+- outside nearby event windows; and
+- prioritised by the same weekday, then nearest eligible calendar date.
+
+Controls are **not** matched on prior returns, volatility, volume, trade count or any proposed predictor. This prevents the app from pre-deciding which market characteristics matter.
+
+## Raw evidence profile
+
+For each event and control anchor:
+
+- ten days of completed 15-minute subject bars;
+- the final 48 hours of completed one-minute subject bars;
+- the same two resolutions for BTCUSDT, ETHUSDT and BNBUSDT;
+- OHLC prices;
+- base and quote volume;
+- trade count;
+- taker-buy base and quote volume; and
+- point-in-time coverage and gap checks.
+
+The anchor minute itself is excluded. Every retained bar closes strictly before the sample anchor.
+
+## Normalised SQLite packages
+
+Each evidence ZIP contains `raw_evidence.sqlite` with these tables:
+
+- `samples` — sample identity, symbol and anchor;
+- `outcomes` — labels and event outcomes, kept separate from raw bars;
+- `sample_windows` — the exact subject/reference window belonging to each sample;
+- `bars` — each raw Binance bar stored once by symbol, interval and timestamp; and
+- `quality` — coverage, gaps, duplicates and ordering checks; and
+- `sample_bars` — a read-only view that applies each sample's exact window and strict pre-anchor cutoff automatically.
+
+Small CSV copies of the metadata tables are included for easy inspection. Raw bars remain in SQLite to avoid duplicating the same BTC, ETH, BNB or subject bars across many samples.
+
+Evidence is split chronologically by event group: 60% discovery, 20% validation and 20% sealed test. Each event remains with all of its controls. Large splits are sharded into packages containing at most 50 event groups.
 
 ## Workflow
 
-1. Scan the current Binance Spot universe for USDT, USDC and FDUSD pairs.
-2. Retain events with at least 500 units of executed quote notional in the five-minute exit window.
-3. Build up to five same-symbol non-event controls for every saleable event.
-4. Match on prior 24-hour return, volatility, quote volume and prior eight-hour return.
-5. Build multi-window precursor features at snapshots from ten days before the baseline through the final completed bar before baseline, including contemporaneous BTC, ETH and BNB market context.
-6. Split event groups chronologically into discovery, validation and sealed-test datasets, keeping each event and its controls together.
-7. Export separate index, discovery, validation and `SEALED_TEST_DO_NOT_OPEN` ZIPs to private Supabase Storage.
+1. Run the historical event scan.
+2. Build neutral controls.
+3. Build raw evidence packages.
+4. Download `binance10_index.zip` and every discovery part listed in its manifest.
+5. Upload those files to ChatGPT for blank-canvas discovery.
+6. Freeze candidate rules and validation acceptance criteria.
+7. Open validation without changing the rules.
+8. Open the sealed test only if validation passes without retuning.
 
-## Boundaries
+## Boundaries and limitations
 
-- No trading, wallet access, API key or order placement.
-- Initial historical coverage uses the current tradeable Binance universe and can miss delisted symbols.
-- Saleability is an evidence screen, not a fill guarantee; historical order-book queues are unavailable.
-- The package finds candidate relationships. It does not claim a profitable rule.
+- No trading, wallet access, order placement or Binance account API key.
+- The current tradeable Binance universe can omit historically delisted assets.
+- Historical order-book queues are unavailable; saleability is an evidence screen, not a fill guarantee.
+- Controls are observational and cannot establish causality.
+- One-minute raw history is limited to the final 48 hours to keep evidence tractable; the full ten days remain available at 15-minute resolution.
+- The app can find data. Only subsequent analysis can determine whether a repeatable, economically useful relationship exists.
 
-See `DEPLOYMENT_GUIDE.md` for copy/paste deployment steps.
-
-## Evidence handling
-
-Download the index and discovery packages first. Do not inspect validation until discovery rules and acceptance thresholds are frozen. Do not inspect the sealed test unless validation passes without retuning.
+See `DEPLOYMENT_GUIDE.md` for deployment and upgrade steps.

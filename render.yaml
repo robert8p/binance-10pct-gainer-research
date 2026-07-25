@@ -9,12 +9,12 @@ services:
         sync: false
       - key: SUPABASE_URL
         sync: false
-      - key: SUPABASE_SERVICE_ROLE_KEY
+      - key: SUPABASE_SECRET_KEY
         sync: false
       - key: ADMIN_PASSWORD
         sync: false
       - key: APP_VERSION
-        value: 1.0.0
+        value: 1.1.0
       - key: TEMP_DATA_DIR
         value: /tmp/binance10
   - type: worker
@@ -27,12 +27,12 @@ services:
         sync: false
       - key: SUPABASE_URL
         sync: false
-      - key: SUPABASE_SERVICE_ROLE_KEY
+      - key: SUPABASE_SECRET_KEY
         sync: false
       - key: ADMIN_PASSWORD
         sync: false
       - key: APP_VERSION
-        value: 1.0.0
+        value: 1.1.0
       - key: TEMP_DATA_DIR
         value: /var/data/binance10
     disk:

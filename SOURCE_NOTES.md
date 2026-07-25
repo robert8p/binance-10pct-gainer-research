@@ -1,13 +1,11 @@
-# External source notes
+# Source notes
 
-The app uses only public Binance Spot market data and does not require a Binance API key.
+Implementation decisions follow the official service documentation current at package construction:
 
-- Public REST market-data base: `https://data-api.binance.vision`
-- Symbol universe: `GET /api/v3/exchangeInfo`
-- Coarse and verification bars: `GET /api/v3/klines`
-- Exact crossing and saleability: official daily Spot `aggTrades` archives from `data.binance.vision`
-- Archive integrity: matching `.CHECKSUM` files are verified when available
+- Binance Spot public market-data REST API and public archive conventions.
+- Supabase backend secret keys for trusted server-side access.
+- Supabase Storage standard uploads for small files and TUS resumable uploads for files above 6 MB, using 6 MB chunks and the direct storage hostname.
+- Render Blueprint service, environment-variable and persistent-disk configuration.
+- ChatGPT file uploads have a 512 MB hard limit per file, so raw evidence is normalised and sharded.
 
-Binance's official public-data documentation notes that Spot archive timestamps from 1 January 2025 onward are expressed in microseconds. The parser supports both the earlier millisecond format and the newer microsecond format.
-
-Render deployment follows the current Blueprint fields for Docker web services, background workers, instance plans and persistent disks.
+The application remains read-only and requires no Binance account credentials.

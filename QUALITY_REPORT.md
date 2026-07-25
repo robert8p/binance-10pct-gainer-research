@@ -1,36 +1,36 @@
-# Quality report — v1.0.0
+# Quality report — v1.1.0
 
-## Research-integrity design
+## Research-boundary checks
 
-- The event baseline uses only completed minutes before the crossing minute.
-- A symbol is suppressed for eight hours after an event to avoid repeated counting of one surge episode.
-- Coarse 15-minute bars only shortlist ranges; one-minute bars determine the qualifying crossing.
-- Saleability reconstructs the exact first aggregate trade at or above the threshold, counts only following executed notional, verifies official archive checksums when available, and falls back visibly to one-minute quote volume only where an archive is unavailable.
-- Controls are same-symbol and same-UTC-slot, separated from events and screened for contaminating 10% moves.
-- BTC, ETH and BNB reference features are calculated with the same completed-bar cutoff as the subject coin.
-- Predictor rows use only fully completed 15-minute bars and stop before each decision timestamp, including when the event baseline occurs mid-bar.
-- Outcome fields are separated into `samples.csv` and prefixed `outcome_`.
-- Event groups are split chronologically into physically separate discovery, validation and sealed-test ZIPs.
-- The 10% threshold, eight-hour window and ten-day history are fixed in schema and code.
+- No predictor feature module is present.
+- No return, volatility, volume-ratio or technical-indicator matching is used for controls.
+- Controls are selected mechanically by symbol, UTC slot, weekday priority and calendar proximity.
+- Labels/outcomes are stored separately from raw bars.
+- Every evidence bar must close strictly before its sample anchor.
+- The anchor minute is excluded to prevent intra-minute leakage.
+- Event groups and their controls remain together across discovery, validation and sealed-test splits.
 
-## Automated checks included
+## Evidence integrity
 
-- Millisecond and microsecond timestamp handling.
-- First-crossing detection and cooldown.
-- Current-bar low exclusion from the baseline.
-- Predictor cutoff before the decision timestamp, including a mid-bar leakage test.
-- Deterministic event-group split coverage.
-- Python compilation and pytest in GitHub Actions.
-
-## Important limitations
-
-- Live Binance, Supabase and Render calls cannot be tested without the user's credentials and deployed environment.
-- Current-universe survivorship bias remains for delisted historical assets.
-- A five-minute executed-notional screen does not reproduce historical spreads, queue position or market impact.
-- At 10%, event counts may be much larger than the 50% app; runtime, storage and control availability should be assessed after the proof scan.
+- Raw decimal values are preserved as text in SQLite rather than rounded to binary floats.
+- Each bar is deduplicated by symbol, interval and open timestamp.
+- `sample_windows` defines the exact point-in-time evidence available to every sample.
+- The `sample_bars` view applies those windows automatically and cannot return a bar closing at or after the anchor.
+- `quality` records expected and actual bar counts, coverage, gaps, duplicates and non-monotonic timestamps.
+- BTCUSDT, ETHUSDT and BNBUSDT context uses the same point-in-time cutoff as the subject.
+- Large splits are sharded at 50 event groups.
 
 ## Operational resilience
 
-- A restarted worker resumes scans after the last fully processed symbol.
-- Interrupted control and context jobs restart cleanly to avoid mixed partial outputs.
-- Failed jobs expose a dashboard retry action.
+- Interrupted scans resume after the last processed symbol.
+- Interrupted control/evidence jobs restart cleanly.
+- Partial local evidence directories are removed before rebuilding.
+- ZIP64 is enabled.
+- Files above 6 MB use Supabase TUS resumable uploads in fixed 6 MB chunks.
+- Large private downloads stream through the web service instead of loading wholly into RAM.
+
+## Automated verification
+
+- Python compilation: passed.
+- Automated tests: 15 passed.
+- Tests cover event detection, coarse candidate detection, exact saleability, symbol preference, opaque Supabase secrets, resumable uploads, neutral controls, point-in-time raw cutoffs, gap detection, chronological evidence splitting and normalised SQLite construction.
