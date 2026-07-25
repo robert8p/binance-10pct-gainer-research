@@ -59,3 +59,20 @@ def test_sqlite_evidence_is_normalised_and_point_in_time(tmp_path):
         assert conn.execute('select count(*) from sample_windows').fetchone()[0] == 4
         assert conn.execute('select max(close_time) < ? from sample_bars', (anchor.isoformat(),)).fetchone()[0] == 1
         assert conn.execute('select count(*) from sample_bars').fetchone()[0] == 3
+
+from app.exporter import _delete_local_package, _sha256_file
+import hashlib
+
+
+def test_uploaded_local_package_cleanup_removes_shard_and_archive(tmp_path):
+    folder = tmp_path / 'discovery_part_001'
+    folder.mkdir()
+    (folder / 'raw_evidence.sqlite').write_bytes(b'evidence')
+    archive = tmp_path / 'binance10_discovery_part_001.zip'
+    archive.write_bytes(b'archive')
+
+    assert _sha256_file(archive) == hashlib.sha256(b'archive').hexdigest()
+    _delete_local_package(folder, archive)
+
+    assert not folder.exists()
+    assert not archive.exists()

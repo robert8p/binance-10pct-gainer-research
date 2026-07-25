@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.1 — bounded-disk evidence finalisation
+
+- Deletes each local uncompressed shard and ZIP immediately after its successful Supabase upload.
+- Prevents uploaded parts from accumulating on the 20 GB Render disk while later parts are compressed.
+- Streams SHA-256 calculation so multi-GB ZIPs are not loaded fully into memory.
+- Removes the finished job directory after the index upload.
+
 ## v1.1.0 — ChatGPT-owned pattern discovery
 
 - Removed application-generated precursor features.

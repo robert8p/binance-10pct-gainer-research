@@ -1,4 +1,4 @@
-# Binance 10% Gainer Research App — v1.1.0
+# Binance 10% Gainer Research App — v1.1.1
 
 A read-only Binance Spot evidence pipeline for investigating **saleable 10% rises within eight hours**.
 
@@ -86,3 +86,8 @@ Evidence is split chronologically by event group: 60% discovery, 20% validation 
 - The app can find data. Only subsequent analysis can determine whether a repeatable, economically useful relationship exists.
 
 See `DEPLOYMENT_GUIDE.md` for deployment and upgrade steps.
+
+
+## v1.1.1 retry note
+
+Do not retry a failed v1.1.0 raw-evidence job until both Render services are running v1.1.1. Retrying the same context job automatically removes its stale local job directory before rebuilding. Delete any orphaned v1.1.0 objects from the Supabase Storage `raw-evidence/<context-job-id>/` folder to avoid storage duplication.

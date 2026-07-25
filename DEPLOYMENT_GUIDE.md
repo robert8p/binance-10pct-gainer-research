@@ -1,4 +1,4 @@
-# Binance 10% Gainer App v1.1.0 — simple deployment
+# Binance 10% Gainer App v1.1.1 — simple deployment
 
 Deploy this separately from the 50% and 25% applications.
 
@@ -54,19 +54,19 @@ https://YOUR-WEB-SERVICE.onrender.com/health
 Expected:
 
 ```json
-{"status":"ok","version":"1.1.0","event_definition":"10pct_within_8h"}
+{"status":"ok","version":"1.1.1","event_definition":"10pct_within_8h"}
 ```
 
 Open the main URL and use any username plus `ADMIN_PASSWORD` as the password.
 
 ## B. Upgrade from v1.0.0 or v1.0.1
 
-1. Replace the repository contents with this v1.1.0 package and commit the changes.
+1. Replace the repository contents with this v1.1.1 package and commit the changes.
 2. In Supabase SQL Editor, rerun the complete new `supabase/schema.sql`.
    - It safely adds the raw-evidence progress column and neutral-control metadata.
    - Existing scans and events remain intact.
 3. In Render, deploy the latest commit for both services.
-4. Confirm `/health` reports `1.1.0`.
+4. Confirm `/health` reports `1.1.1`.
 5. Do not reuse a completed old feature/context job. Create a new Step 2 control job and Step 3 raw-evidence job so the evidence follows the new neutral protocol.
 
 ## C. Proof scan
@@ -136,3 +136,15 @@ Perform a blank-canvas analysis of the attached Binance 10% raw discovery eviden
 - Evidence packages use normalised SQLite so repeated market bars are stored once.
 - Each discovery/validation/sealed shard contains at most 50 event groups to keep files manageable.
 - Keep the Render worker disk until all packages have been downloaded and verified.
+
+## Upgrade from v1.1.0 after `No space left on device`
+
+1. Suspend the Render worker before changing code.
+2. Replace the GitHub repository contents with v1.1.1 and commit.
+3. Redeploy both the web service and worker; no Supabase schema change is required for this patch.
+4. Confirm `/health` reports `1.1.1`.
+5. Resume the worker if it remains suspended.
+6. Click **Retry** on the failed raw-evidence job. The raw-evidence stage restarts from zero, but the completed scan and neutral-control job are reused.
+7. Do not click Retry until the worker is definitely on v1.1.1.
+
+The same context-job ID and storage paths are reused, so the first three partial discovery objects are overwritten during the retry.

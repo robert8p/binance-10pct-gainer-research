@@ -1,6 +1,6 @@
 {
   "package": "binance_10pct_gainer_research",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "generated_date": "2026-07-25",
   "research_boundary": "Application collects and quality-checks raw evidence; ChatGPT derives features and identifies patterns.",
   "file_count_excluding_manifest": 35,
@@ -17,18 +17,18 @@
     },
     {
       "path": ".github/workflows/tests.yml",
-      "size_bytes": 348,
-      "sha256": "b374020547a2ef79215988948b3abea3fc83af509ce26956a0a5d8905207dcdf"
+      "size_bytes": 338,
+      "sha256": "52f5ccd2b0f486a10ed80c8072262b11bcb26b96e1f7caf6a438e1455a4ff0d4"
     },
     {
       "path": "CHANGELOG.md",
-      "size_bytes": 854,
-      "sha256": "96eb43d6faf78496ac6de7cbfd6182a68391fb919448fe566c5bb7bfd3f40ae2"
+      "size_bytes": 1247,
+      "sha256": "c97f417f8035136893f185087b626cef1451ca5c21b70581951da53a4c17e4e2"
     },
     {
       "path": "DEPLOYMENT_GUIDE.md",
-      "size_bytes": 4684,
-      "sha256": "18286d92795ed278e4f496cfeb3cc574fe0ec2fae545d4960a10d51e6e125f0e"
+      "size_bytes": 5392,
+      "sha256": "c87bfa1a99c85e2dc2ec2aed5d0175db8a02d1eb87cab410bb2b9a6ea7e9ee1d"
     },
     {
       "path": "Dockerfile",
@@ -37,13 +37,13 @@
     },
     {
       "path": "QUALITY_REPORT.md",
-      "size_bytes": 1969,
-      "sha256": "e4fe1ac05a95753092c1ff1f9b8cfe6eb1a5832f5f1079a9d37812edaa41829d"
+      "size_bytes": 2343,
+      "sha256": "d20e27e6660513517980304c1f69b055858ad5f94ab2c2247fdb43b33418ae77"
     },
     {
       "path": "README.md",
-      "size_bytes": 4502,
-      "sha256": "5e3369dc8066127f22f6c7a177deab3e79320ea45d5537d56f65bd2f911235cf"
+      "size_bytes": 4851,
+      "sha256": "b537024c38e0dacd129ea0ba02a204f94b40f0c668b3004389db73084a0c3224"
     },
     {
       "path": "SOURCE_NOTES.md",
@@ -63,7 +63,7 @@
     {
       "path": "app/config.py",
       "size_bytes": 1631,
-      "sha256": "79057b4c432aba3b5d2c9280bc3c69a3e5e7a2a4e13f5a8d95be82b79c7d8acc"
+      "sha256": "e673a71dc4cee5f6a3e423ac7ba814886c83be723de2460dfecbe886032c5c23"
     },
     {
       "path": "app/controls.py",
@@ -77,8 +77,8 @@
     },
     {
       "path": "app/exporter.py",
-      "size_bytes": 22824,
-      "sha256": "77060e568367f4bfaa005588d4120603acf05a9d18543ad127f06f73deb51b5d"
+      "size_bytes": 23818,
+      "sha256": "244791eea14a3c36d61bca3e144f6c1f17088bd501cd4557697d71b2d3f27b96"
     },
     {
       "path": "app/jobs.py",
@@ -88,7 +88,7 @@
     {
       "path": "app/main.py",
       "size_bytes": 7391,
-      "sha256": "c190061a2521619422e31880aa7e6d502ba84df3ba8997d14cc73af9bc9db841"
+      "sha256": "2d4e4f09ae612f38e7046615ae8adc22c8b9e68c67fb146610c1b841f3973b86"
     },
     {
       "path": "app/models.py",
@@ -123,7 +123,7 @@
     {
       "path": "render.yaml",
       "size_bytes": 962,
-      "sha256": "4b8c582a02502c77f7514e41702707877802abb614ba39e4260f475f42f500b8"
+      "sha256": "ff54ad3f5e7e54446f623a9c60e808af70a80137e9e75d7a3b6e4ca594e283ff"
     },
     {
       "path": "requirements.txt",
@@ -152,8 +152,8 @@
     },
     {
       "path": "tests/test_exporter.py",
-      "size_bytes": 2711,
-      "sha256": "6dc4394f5fd0b78be178303ea5b90962b3230033932087fc105df1835b1159d0"
+      "size_bytes": 3272,
+      "sha256": "d3ceef616f7275ef0cfdbfd7c4d138681cd31cee6268dedf7c435023ef0d604d"
     },
     {
       "path": "tests/test_raw_evidence.py",

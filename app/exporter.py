@@ -67,12 +67,29 @@ def _event_splits(sample_rows: list[dict[str, object]]) -> dict[str, set[str]]:
     return {key: set(value) for key, value in event_splits(events).items()}
 
 
+def _sha256_file(path: Path, chunk_size: int = 8 * 1024 * 1024) -> str:
+    digest = hashlib.sha256()
+    with path.open('rb') as handle:
+        while chunk := handle.read(chunk_size):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def _zip_folder(folder: Path, output: Path) -> str:
+    # Stream the archive hash rather than reading a potentially multi-GB ZIP into RAM.
     with ZipFile(output, 'w', ZIP_DEFLATED, compresslevel=9, allowZip64=True) as archive:
         for path in sorted(folder.rglob('*')):
             if path.is_file():
                 archive.write(path, arcname=str(path.relative_to(folder)))
-    return hashlib.sha256(output.read_bytes()).hexdigest()
+    return _sha256_file(output)
+
+
+def _delete_local_package(folder: Path, archive: Path) -> None:
+    # Evidence is durable in Supabase after _register_upload returns. Remove both
+    # the uncompressed shard and its ZIP immediately so later parts do not fill
+    # the persistent Render disk.
+    archive.unlink(missing_ok=True)
+    shutil.rmtree(folder, ignore_errors=True)
 
 
 def _register_upload(
@@ -374,10 +391,11 @@ class RawEvidencePackageBuilder:
             split_manifests[split].append({
                 'part': part,
                 'filename': filename,
-                'size_bytes': zip_path.stat().st_size,
+                'size_bytes': record['size_bytes'],
                 'sha256': digest,
                 **counts,
             })
+            _delete_local_package(shard.folder, zip_path)
 
         discovery_files = [part['filename'] for part in split_manifests['discovery']]
         validation_files = [part['filename'] for part in split_manifests['validation']]
@@ -426,6 +444,13 @@ class RawEvidencePackageBuilder:
             'index',
         )
         outputs.insert(0, index_record)
+        _delete_local_package(index_folder, index_path)
+        # The job-specific directory should now be empty. Removing it prevents
+        # stale partial artefacts from accumulating across runs.
+        try:
+            self.root.rmdir()
+        except OSError:
+            pass
         return outputs
 
 

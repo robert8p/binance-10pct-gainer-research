@@ -1,4 +1,4 @@
-# Quality report — v1.1.0
+# Quality report — v1.1.1
 
 ## Research-boundary checks
 
@@ -32,5 +32,10 @@
 ## Automated verification
 
 - Python compilation: passed.
-- Automated tests: 15 passed.
+- Automated tests: 16 passed.
 - Tests cover event detection, coarse candidate detection, exact saleability, symbol preference, opaque Supabase secrets, resumable uploads, neutral controls, point-in-time raw cutoffs, gap detection, chronological evidence splitting and normalised SQLite construction.
+
+
+## v1.1.1 disk-boundary correction
+
+The prior exporter retained every uncompressed SQLite shard, generated CSVs and uploaded ZIP on the persistent disk until the entire job ended. At 3,087 events this exhausted a 20 GB disk during part finalisation. v1.1.1 deletes each local shard and archive immediately after a confirmed Supabase upload and hashes archives as streams.
