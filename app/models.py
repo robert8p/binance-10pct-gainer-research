@@ -21,19 +21,21 @@ class Kline:
 
 
 @dataclass(frozen=True)
-class DetectedEvent:
-    symbol: str
-    base_asset: str
-    quote_asset: str
-    baseline_time: datetime
-    baseline_price: Decimal
-    crossing_time: datetime
-    crossing_bar_open: Decimal
-    crossing_bar_high: Decimal
-    threshold_price: Decimal
-    gain_pct: Decimal
-    minutes_to_cross: int
+class CandidateOutcome:
+    decision_time: datetime
+    split: str
+    entry_price: Decimal
+    entry_quote_notional: Decimal
+    entry_trade_count: int
+    entry_liquid: bool
+    target_price: Decimal
+    target_reached: bool
+    crossing_minute: datetime | None
+    minutes_to_cross: int | None
+    max_forward_high: Decimal
+    max_forward_gain_pct: Decimal
     exit_quote_notional: Decimal
     exit_trade_count: int
-    saleability_source: str
-    saleable: bool
+    exit_liquid: bool
+    liquidity_assessment_complete: bool
+    actionable_10pct: bool

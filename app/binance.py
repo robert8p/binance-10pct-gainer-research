@@ -33,7 +33,7 @@ class BinanceClient:
     def __init__(self, settings: Settings):
         self.settings = settings
         self.session = requests.Session()
-        self.session.headers.update({'User-Agent': 'binance-10pct-research/1.0'})
+        self.session.headers.update({'User-Agent': 'binance-10pct-research/1.2'})
 
     def _get_json(self, path: str, params: dict[str, object] | None = None) -> object:
         url = f'{self.settings.public_api_base}{path}'

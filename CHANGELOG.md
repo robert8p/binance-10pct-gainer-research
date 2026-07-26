@@ -1,32 +1,28 @@
 # Changelog
 
-## 1.1.2 — collision-safe raw-evidence retries
+## 1.2.0
 
-- Deletes every stale Supabase Storage object beneath the context-job prefix before a raw-evidence rebuild starts.
-- Verifies the prefix is empty before downloading and packaging hundreds of millions of bar references.
-- Writes each retry to a unique `attempt_<uuid>` Storage folder, so an earlier failed attempt cannot collide with a new filename.
-- Verifies every uploaded object exists in Supabase and has the exact expected byte size before registering it or deleting the local copy.
-- Treats a TUS `409 Conflict` as fatal unless the server upload offset has genuinely advanced; it no longer repeats the same conflicting PATCH five times.
-- Retains the bounded-disk behaviour introduced in v1.1.1.
+- Replaced hindsight-selected event baselines and matched controls with a complete 15-minute candidate grid.
+- Entry benchmark changed from a future local low to the timestamp-aligned interval open.
+- Added every eligible negative decision to preserve the true denominator.
+- Added full forward-window completeness checks so missing data cannot silently become a negative.
+- Applied chronological 60/20/20 splitting before analysis.
+- Added eight-hour embargoes before Validation and Sealed Test.
+- Added separate entry and post-crossing exit liquidity screens, plus an explicit completeness flag so missing one-minute evidence is not relabelled as a negative.
+- Removed event cooldowns and control matching; overlapping decisions remain because they are genuine decision opportunities.
+- Replaced event-group exports with complete ledgers, market context and normalised subject shards.
+- Added lookahead-safe `candidate_bars` and `market_decision_bars` views.
+- Retained unique-attempt Storage paths, stale-prefix cleanup, upload verification and immediate local cleanup.
+- Removed the dashboard's 30-file display cap.
 
-## 1.1.1 — bounded-disk evidence finalisation
+## 1.1.2
 
-- Deletes each local uncompressed shard and ZIP immediately after its successful Supabase upload.
-- Prevents uploaded parts from accumulating on the 20 GB Render disk while later parts are compressed.
-- Streams SHA-256 calculation so multi-GB ZIPs are not loaded fully into memory.
-- Removes the finished job directory after the index upload.
+- Fixed stale Supabase object collisions on retry.
 
-## 1.1.0 — ChatGPT-owned pattern discovery
+## 1.1.1
 
-- Removed application-generated precursor features.
-- Removed return, volatility and volume-based control matching.
-- Added neutral same-symbol/time-slot/calendar controls.
-- Added ten-day 15-minute and final-48-hour one-minute raw evidence.
-- Added point-in-time BTC, ETH and BNB raw context.
-- Added normalised SQLite evidence storage and lookahead-safe `sample_bars` view.
-- Separated outcomes from predictor bars.
-- Added coverage, gap, duplicate and ordering checks.
-- Added chronological discovery, validation and sealed-test packages with 50-event-group sharding.
-- Added resumable large-file uploads and streamed downloads.
-- Added explicit ChatGPT blank-canvas analysis protocol inside every evidence package.
-- Retained Supabase `sb_secret_` support and legacy service-role fallback.
+- Fixed Render disk accumulation during evidence packaging.
+
+## 1.1.0
+
+- Moved feature generation out of the application, but retained a flawed hindsight event/control design. Superseded.

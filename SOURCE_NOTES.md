@@ -1,13 +1,8 @@
-# Source notes
+# Primary source notes
 
-Implementation decisions follow the official service documentation current at package construction:
+- Binance Spot public market data base endpoint and REST behaviour: https://developers.binance.com/en/docs/products/spot/rest-api
+- Binance Spot kline response fields include open time, open/high/low/close, quote volume and trade count: https://developers.binance.com/docs/binance-spot-api-docs/rest-api/market-data-endpoints
+- Supabase recommends TUS resumable uploads for files above 6 MB, fixed 6 MB chunks and the direct Storage hostname: https://supabase.com/docs/guides/storage/uploads/resumable-uploads
+- Render Blueprint service, Docker worker and disk fields: https://render.com/docs/blueprint-spec
 
-- Binance Spot public market-data REST API and public archive conventions.
-- Supabase backend secret keys for trusted server-side access.
-- Supabase Storage standard uploads for small files and TUS resumable uploads for files above 6 MB, using 6 MB chunks and the direct storage hostname.
-- Supabase Storage list/remove operations for job-prefix cleanup and object-info retrieval for persisted-size verification.
-- Supabase documents `409 Conflict` for concurrent or duplicate resumable uploads; v1.1.2 resumes only where the server offset proves progress and otherwise fails immediately.
-- Render Blueprint service, environment-variable and persistent-disk configuration.
-- ChatGPT file uploads have a 512 MB hard limit per file, so raw evidence is normalised and sharded.
-
-The application remains read-only and requires no Binance account credentials.
+The application treats the Binance kline open as a timestamp-aligned trade-price benchmark. It does not claim knowledge of the exact sub-minute trade timestamp or historical order-book fill.

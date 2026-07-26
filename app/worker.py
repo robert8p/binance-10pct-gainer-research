@@ -11,7 +11,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name
 
 def main() -> None:
     settings = get_settings()
-    logging.info('Binance 10%% research worker started')
+    logging.info('Binance 10%% executable-grid research worker started')
     recover_interrupted_jobs(settings)
     while True:
         worked = process_one(settings)

@@ -1,164 +1,88 @@
-# Binance 10% Gainer App v1.1.2 — simple deployment
+# Upgrade deployment — v1.2.0
 
-Deploy this separately from the 50% and 25% applications.
+v1.2.0 uses new Supabase tables. The old v1.0/v1.1 tables and files remain untouched as an audit trail but are no longer read by the app.
 
-## A. New deployment
+## 1. Stop the worker
 
-### 1. GitHub
+In Render, suspend `binance-10pct-scanner-worker`. Confirm new worker logs stop appearing.
 
-1. Create a private repository named `binance-10pct-gainer-research`.
-2. Extract this ZIP.
-3. Upload everything **inside** the extracted folder.
-4. Confirm the repository root directly shows `app`, `supabase`, `tests`, `render.yaml` and `requirements.txt`.
+## 2. Replace the GitHub repository contents
 
-### 2. Supabase
+1. Extract the v1.2.0 ZIP.
+2. Delete the existing repository contents, except `.git` when working locally.
+3. Upload everything inside the extracted folder to the repository root.
+4. Confirm `app`, `supabase`, `tests`, `render.yaml`, `Dockerfile` and `requirements.txt` are visible at repository root.
+5. Commit: `Replace leaked event-control design with executable candidate grid v1.2.0`.
 
-1. Create or select a Supabase project.
-2. Open **SQL Editor → New query**.
-3. Paste the complete contents of `supabase/schema.sql`.
-4. Run it.
-5. Copy:
-   - project URL → `SUPABASE_URL`;
-   - secret key beginning `sb_secret_` → `SUPABASE_SECRET_KEY`;
-   - Session Pooler connection string on port 5432 → `DATABASE_URL`.
-6. Create a strong app password → `ADMIN_PASSWORD`.
+## 3. Create the v1.2 Supabase tables
 
-Never place any of these values in GitHub.
+1. Open Supabase → SQL Editor → New query.
+2. Open `supabase/schema.sql` from this package.
+3. Paste the entire file and select **Run**.
+4. The script creates `binance10_grid_jobs`, `binance10_candidates`, `binance10_export_jobs`, `binance10_grid_files` and `binance10_grid_issues`.
+5. Do not delete the old tables; they document the invalidated v1.1 run.
 
-### 3. Render
+## 4. Deploy the web service
 
-1. Choose **New → Blueprint**.
-2. Connect the GitHub repository.
-3. Approve both services:
-   - `binance-10pct-scanner-web`;
-   - `binance-10pct-scanner-worker`.
-4. Enter the same four secrets on both services:
+Deploy the latest commit to `binance-10pct-scanner-web`.
 
-```text
-DATABASE_URL
-SUPABASE_URL
-SUPABASE_SECRET_KEY
-ADMIN_PASSWORD
-```
-
-The worker uses a persistent disk for Binance archive caching and evidence construction.
-
-### 4. Verify
-
-Open:
-
-```text
-https://YOUR-WEB-SERVICE.onrender.com/health
-```
-
-Expected:
+Open `/health`. Required response:
 
 ```json
-{"status":"ok","version":"1.1.2","event_definition":"10pct_within_8h"}
+{
+  "status": "ok",
+  "version": "1.2.0",
+  "event_definition": "executable_entry_10pct_within_8h_on_complete_15m_grid"
+}
 ```
 
-Open the main URL and use any username plus `ADMIN_PASSWORD` as the password.
+## 5. Deploy and resume the worker
 
-## B. Upgrade from v1.0.0 or v1.0.1
+Deploy the same commit to `binance-10pct-scanner-worker`, then resume it. Required secrets on both services:
 
-1. Replace the repository contents with this v1.1.2 package and commit the changes.
-2. In Supabase SQL Editor, rerun the complete new `supabase/schema.sql`.
-   - It safely adds the raw-evidence progress column and neutral-control metadata.
-   - Existing scans and events remain intact.
-3. In Render, deploy the latest commit for both services.
-4. Confirm `/health` reports `1.1.2`.
-5. Do not reuse a completed old feature/context job. Create a new Step 2 control job and Step 3 raw-evidence job so the evidence follows the new neutral protocol.
+- `DATABASE_URL`
+- `SUPABASE_URL`
+- `SUPABASE_SECRET_KEY`
+- `ADMIN_PASSWORD`
 
-## C. Proof scan
+Do not use a publishable/anon key.
 
-Before a full scan:
+## 6. Proof run
 
-1. Add `MAX_SYMBOLS=5` to the **worker only**.
-2. Redeploy the worker.
-3. Queue a two-day scan with minimum exit notional 500.
-4. Confirm it completes without failures; zero events is acceptable.
-5. Delete `MAX_SYMBOLS` and redeploy the worker.
-
-## D. Full workflow
-
-### Step 1 — Detect events
-
-Use:
+Temporarily add this environment variable to the worker:
 
 ```text
-Lookback: 60 completed UTC days
-Minimum executed exit notional: 500
+MAX_SYMBOLS=5
 ```
 
-The threshold, rolling window, cooldown and saleability period are fixed at 10%, eight hours, eight hours and 300 seconds.
+Rebuild and deploy the worker. In the dashboard queue a 10-day candidate grid. Wait for completion and confirm:
 
-### Step 2 — Neutral controls
+- five symbols processed;
+- candidates include both positive and negative outcomes;
+- candidate timestamps are all quarter-hour boundaries;
+- the job has no failures.
 
-Select the completed scan and use five controls per event. Controls are selected by symbol/time/calendar eligibility only—not by engineered market features.
+Queue an export only after the proof grid completes. Confirm the index, Discovery ledger, Discovery market file and Discovery subject parts appear.
 
-### Step 3 — Raw evidence export
+## 7. Full run
 
-Select the completed control job and click **Build raw evidence packages**.
+Delete `MAX_SYMBOLS`, rebuild and deploy the worker, then queue a new 60-day grid. Do not reuse the proof job.
 
-This stage is materially heavier than the previous feature export because it gathers raw one-minute and 15-minute sequences. The worker streams progress and uses resumable uploads for large ZIPs.
+After the grid completes, queue one raw evidence export. The export will take substantial time because it retains the complete candidate denominator and unique raw one-minute bars.
 
-## E. Files to provide to ChatGPT
+## 8. Files to return for analysis
 
-Download:
+Upload only:
 
-1. `binance10_index.zip`; and
-2. every discovery file listed in the index manifest, for example:
+- `binance10_index.zip`
+- `binance10_discovery_ledger.zip`
+- `binance10_discovery_market.zip`
+- every `binance10_discovery_subject_part_*.zip`
 
-```text
-binance10_discovery.zip
-```
+Do not open or upload Validation or any file beginning `SEALED_TEST_DO_NOT_OPEN` until requested.
 
-or, for a large dataset:
+## Retry behaviour
 
-```text
-binance10_discovery_part_001.zip
-binance10_discovery_part_002.zip
-...
-```
-
-Do not open or upload validation or `SEALED_TEST_DO_NOT_OPEN` packages until instructed.
-
-Use this instruction when uploading discovery evidence:
-
-```text
-Perform a blank-canvas analysis of the attached Binance 10% raw discovery evidence. The app has not engineered predictor features or identified patterns. Read and follow CHATGPT_ANALYSIS_PROTOCOL.md. Derive candidate representations from the raw sequences, compare event groups with their controls, correct for multiple testing, assess cross-symbol and chronological stability, and report failures as well as successes. Do not inspect validation or sealed-test evidence. Finish by proposing a small set of precisely frozen candidate rules and explicit validation acceptance criteria—or conclude that no sufficiently robust relationship exists.
-```
-
-## F. Important operational notes
-
-- Large packages are uploaded to Supabase through resumable 6 MB chunks.
-- Dashboard downloads are streamed rather than loaded into web-service memory.
-- Evidence packages use normalised SQLite so repeated market bars are stored once.
-- Each discovery/validation/sealed shard contains at most 50 event groups to keep files manageable.
-- Keep the Render worker disk until all packages have been downloaded and verified.
-
-## Upgrade from v1.1.0 or v1.1.1 after a failed raw-evidence export
-
-1. **Suspend** `binance-10pct-scanner-worker` in Render.
-2. Replace the GitHub repository contents with v1.1.2 and commit.
-3. Deploy the latest commit to both the web service and worker.
-4. No Supabase schema change is required for this patch.
-5. Open `/health` and confirm it reports `1.1.2`.
-6. Resume the worker and wait until it is Live.
-7. Click **Retry once** on the existing failed raw-evidence job.
-
-The retry reuses the completed scan and neutral controls. It restarts raw-evidence construction from zero, but before doing so it automatically removes and verifies deletion of all stale objects under the old context-job Storage prefix. The new files are written under a unique attempt folder, for example:
-
-```text
-raw-evidence/<context-job-id>/attempt_<unique-id>/binance10_discovery_part_001.zip
-```
-
-Do not manually create another control job or raw-evidence job. Do not click Retry repeatedly.
-
-### Expected retry sequence in the worker logs
-
-```text
-Prepared clean raw-evidence storage prefix ... removed 3 stale object(s)
-```
-
-followed later by successful per-part uploads. If Storage cleanup or verification fails, the job stops before rebuilding rather than risking another collision.
+- A worker restart resumes an interrupted candidate-grid scan from the next symbol.
+- A manual grid retry clears the incomplete grid and starts it from zero.
+- An export retry removes stale Supabase objects, starts a unique attempt folder and reconstructs the export from zero.

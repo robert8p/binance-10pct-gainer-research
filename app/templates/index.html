@@ -1,42 +1,54 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta http-equiv="refresh" content="30">
-  <title>Binance 10% Gainer Research</title>
+  <title>Binance 10% Executable Grid Research</title>
   <style>
-    :root{font-family:Inter,system-ui,sans-serif;color:#172033;background:#f4f6fb}body{margin:0}.wrap{max-width:1200px;margin:auto;padding:28px}header{background:#101a35;color:white;padding:28px;border-radius:18px;margin-bottom:20px}h1{margin:0 0 8px;font-size:30px}.sub{opacity:.82}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:18px}.card{background:white;border-radius:16px;padding:20px;box-shadow:0 6px 24px rgba(20,31,60,.08)}h2{margin-top:0;font-size:19px}.note{font-size:13px;color:#5b6477;background:#f6f8fc;padding:10px;border-radius:10px}.boundary{font-size:13px;color:#0d4f36;background:#e9f8f0;padding:12px;border-radius:10px;margin-top:12px}label{display:block;font-size:13px;font-weight:650;margin:12px 0 5px}input,select,button{width:100%;box-sizing:border-box;padding:11px;border-radius:9px;border:1px solid #ccd3df;background:white}button{margin-top:15px;background:#1769e0;color:white;border:0;font-weight:700;cursor:pointer}table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;padding:8px;border-bottom:1px solid #e7eaf0;vertical-align:top}.status{font-weight:700}.completed{color:#16824b}.failed{color:#b42318}.running{color:#b36b00}a{color:#1769e0;text-decoration:none}.wide{grid-column:1/-1}.scroll{overflow:auto;max-height:430px}.fixed{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}</style>
+    :root{font-family:Inter,system-ui,sans-serif;color:#172033;background:#f4f6fb}body{margin:0}.wrap{max-width:1320px;margin:auto;padding:28px}
+    header{background:#101a35;color:white;padding:28px;border-radius:18px;margin-bottom:20px}h1{margin:0 0 8px;font-size:30px}.sub{opacity:.84;max-width:960px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:18px}.card{background:white;border-radius:16px;padding:20px;box-shadow:0 6px 24px rgba(20,31,60,.08)}
+    .wide{grid-column:1/-1}h2{margin-top:0;font-size:19px}.note{font-size:13px;color:#465168;background:#f6f8fc;padding:11px;border-radius:10px;line-height:1.45}
+    .good{font-size:13px;color:#0d4f36;background:#e9f8f0;padding:11px;border-radius:10px;margin-top:10px}label{display:block;font-size:13px;font-weight:650;margin:12px 0 5px}
+    input,select,button{width:100%;box-sizing:border-box;padding:11px;border-radius:9px;border:1px solid #ccd3df;background:white}button{margin-top:15px;background:#1769e0;color:white;border:0;font-weight:700;cursor:pointer}
+    table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;padding:8px;border-bottom:1px solid #e7eaf0;vertical-align:top}.scroll{overflow:auto;max-height:620px}
+    .status{font-weight:700}.completed,.completed_with_warnings{color:#16824b}.failed{color:#b42318}.running{color:#b36b00}.queued{color:#526071}a{color:#1769e0;text-decoration:none}
+    .fixed{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}.split{font-weight:700;text-transform:capitalize}.sealed_test{color:#9a3412}.validation{color:#6d28d9}.discovery{color:#0369a1}
+  </style>
 </head>
 <body><div class="wrap">
-<header><h1>Binance 10% Gainer Research</h1><div class="sub">Detect saleable 10% rises, select neutral controls, and export raw point-in-time evidence for ChatGPT to analyse.</div></header>
+<header><h1>Binance 10% Executable Grid Research</h1><div class="sub">Version {{ version }} — one identical 15-minute decision grid for winners and non-winners. The app labels outcomes and exports raw evidence; ChatGPT derives every predictor and pattern.</div></header>
 {% if not configured %}<div class="card"><strong>DATABASE_URL is not configured.</strong></div>{% endif %}
 <div class="grid">
-  <section class="card"><h2>Step 1 — Detect events</h2>
-    <div class="note">Fixed definition: 10% rise above the lowest completed one-minute low in the preceding eight hours. One event per symbol per eight-hour cooldown.</div>
-    <form method="post" action="/scan">
-      <label>Lookback completed UTC days</label><input type="number" name="lookback_days" value="60" min="2" max="365">
-      <label>Historical start (optional)</label><input type="date" name="historical_start">
-      <label>Historical end, exclusive (optional)</label><input type="date" name="historical_end_exclusive">
-      <label>Minimum executed exit notional</label><input type="number" name="min_exit_notional" value="500" min="0" step="50">
-      <button>Queue 10% event scan</button>
-    </form>
-  </section>
-  <section class="card"><h2>Step 2 — Neutral controls</h2>
-    <div class="note">Controls use the same coin and UTC time slot, prioritising the same weekday and nearest eligible dates. The app does not match on returns, volatility, volume or any proposed predictor.</div>
-    <form method="post" action="/controls">
-      <label>Completed scan</label><select name="scan_job_id" required><option value="">Select…</option>{% for x in scans if x.status in ['completed','completed_with_warnings'] %}<option value="{{x.id}}">{{x.window_start_date}} → {{x.window_end_date_exclusive}} · {{x.saleable_events}} saleable</option>{% endfor %}</select>
-      <label>Controls per event</label><input type="number" name="controls_per_event" value="5" min="1" max="10">
-      <button>Queue neutral controls</button>
-    </form>
-  </section>
-  <section class="card"><h2>Step 3 — Raw evidence export</h2>
-    <form method="post" action="/context">
-      <label>Completed control job</label><select name="control_job_id" required><option value="">Select…</option>{% for x in controls if x.status in ['completed','completed_with_warnings'] %}<option value="{{x.id}}">{{x.created_at}} · {{x.controls_created}} controls</option>{% endfor %}</select>
-      <button>Build raw evidence packages</button>
-    </form>
-    <div class="boundary"><strong>Analysis boundary:</strong> the app exports ten days of 15-minute bars and the final 48 hours of one-minute bars for each subject plus BTC, ETH and BNB. It calculates no predictor features and identifies no patterns. Upload the discovery package to ChatGPT.</div>
-  </section>
-  <section class="card wide"><h2>Scan jobs</h2><div class="scroll"><table><tr><th>Created</th><th>Period</th><th>Status</th><th>Progress</th><th>Events</th><th>Saleable</th><th>Failures</th></tr>{% for x in scans %}<tr><td>{{x.created_at}}</td><td>{{x.window_start_date}} → {{x.window_end_date_exclusive}}</td><td class="status {{x.status}}">{{x.status}}</td><td>{{x.symbols_processed}} / {{x.symbols_total}}</td><td>{{x.events_found}}</td><td>{{x.saleable_events}}</td><td>{{x.failures}}{% if x.status == 'failed' %}<form method="post" action="/retry/scan/{{x.id}}"><button style="padding:5px;margin-top:4px">Retry</button></form>{% endif %}</td></tr>{% endfor %}</table></div></section>
-  <section class="card wide"><h2>Downstream jobs and files</h2><div class="scroll"><table><tr><th>Type</th><th>Created</th><th>Status/file</th><th>Progress</th></tr>{% for x in controls %}<tr><td>Neutral controls</td><td>{{x.created_at}}</td><td class="status {{x.status}}">{{x.status}}</td><td>{{x.events_processed}} events · {{x.controls_created}} controls{% if x.status == 'failed' %}<form method="post" action="/retry/controls/{{x.id}}"><button style="padding:5px;margin-top:4px">Retry</button></form>{% endif %}</td></tr>{% endfor %}{% for x in contexts %}<tr><td>Raw evidence</td><td>{{x.created_at}}</td><td class="status {{x.status}}">{{x.status}}</td><td>{{x.events_processed}} events · {{x.samples_total}} samples · {{x.raw_bar_rows or 0}} raw bars{% if x.status == 'failed' %}<form method="post" action="/retry/context/{{x.id}}"><button style="padding:5px;margin-top:4px">Retry</button></form>{% endif %}</td></tr>{% endfor %}{% for x in files %}<tr><td>Download</td><td>{{x.created_at}}</td><td><a href="/download/{{x.id}}">{{x.filename}}</a><br><small>{{x.role}}</small></td><td class="fixed">{{x.sha256[:16]}}…</td></tr>{% endfor %}</table></div></section>
+<section class="card"><h2>Step 1 — Complete candidate grid</h2>
+  <div class="note">Every eligible symbol is evaluated at every 15-minute UTC boundary. Entry is the interval's first trade price, not a hindsight-selected low. +10% is tested over the following eight hours. Discovery, validation and sealed test are split chronologically before analysis, with an eight-hour embargo.</div>
+  <form method="post" action="/grid">
+    <label>Lookback completed UTC days</label><input type="number" name="lookback_days" value="60" min="10" max="365">
+    <label>Historical start (optional)</label><input type="date" name="historical_start">
+    <label>Historical end, exclusive (optional)</label><input type="date" name="historical_end_exclusive">
+    <label>Minimum entry quote notional in 15 minutes</label><input type="number" name="min_entry_notional" value="500" min="0" step="1">
+    <label>Minimum exit quote notional in five full minutes after crossing</label><input type="number" name="min_exit_notional" value="500" min="0" step="1">
+    <button type="submit">Queue candidate-grid scan</button>
+  </form>
+</section>
+<section class="card"><h2>Step 2 — Raw evidence export</h2>
+  <div class="note">Exports the complete candidate ledger plus ten days of raw 15-minute history and 48 hours of raw one-minute history. No controls are selected and no predictor features are calculated.</div>
+  <form method="post" action="/export">
+    <label>Completed candidate-grid job</label>
+    <select name="grid_job_id" required><option value="">Select…</option>{% for job in grids %}{% if job.status in ['completed','completed_with_warnings'] %}<option value="{{ job.id }}">{{ job.created_at }} — {{ job.candidates_total }} candidates / {{ job.actionable_count }} actionable</option>{% endif %}{% endfor %}</select>
+    <button type="submit">Build raw evidence packages</button>
+  </form>
+  <div class="good">First analysis upload: index + every Discovery ledger, market and subject part. Keep Validation and Sealed Test unopened.</div>
+</section>
+<section class="card wide"><h2>Candidate-grid jobs</h2><div class="scroll"><table><thead><tr><th>Created</th><th>Status</th><th>Period</th><th>Progress</th><th>Candidates</th><th>Target</th><th>Actionable</th><th>Failures</th><th></th></tr></thead><tbody>
+{% for job in grids %}<tr><td>{{ job.created_at }}</td><td class="status {{ job.status }}">{{ job.status }}</td><td>{{ job.window_start_date }} → {{ job.window_end_date_exclusive }}</td><td>{{ job.symbols_processed }}/{{ job.symbols_total }}</td><td>{{ job.candidates_total }}</td><td>{{ job.target_reached_count }}</td><td>{{ job.actionable_count }}</td><td>{{ job.failures }}</td><td>{% if job.status == 'failed' %}<form method="post" action="/retry/grid/{{ job.id }}"><button>Retry</button></form>{% endif %}</td></tr>
+{% if job.error_message %}<tr><td colspan="9"><pre class="fixed">{{ job.error_message }}</pre></td></tr>{% endif %}{% endfor %}
+</tbody></table></div></section>
+<section class="card wide"><h2>Evidence export jobs</h2><div class="scroll"><table><thead><tr><th>Created</th><th>Status</th><th>Symbols</th><th>Files</th><th>Raw bars</th><th>Failures</th><th></th></tr></thead><tbody>
+{% for job in exports %}<tr><td>{{ job.created_at }}</td><td class="status {{ job.status }}">{{ job.status }}</td><td>{{ job.symbols_processed }}</td><td>{{ job.files_created }}</td><td>{{ job.raw_bar_rows }}</td><td>{{ job.failures }}</td><td>{% if job.status == 'failed' %}<form method="post" action="/retry/export/{{ job.id }}"><button>Retry once</button></form>{% endif %}</td></tr>
+{% if job.error_message %}<tr><td colspan="7"><pre class="fixed">{{ job.error_message }}</pre></td></tr>{% endif %}{% endfor %}
+</tbody></table></div></section>
+<section class="card wide"><h2>All generated files</h2><div class="note">This list is no longer capped at 30 files. Validation and sealed-test downloads are shown so they can be preserved, but must not be opened during discovery.</div><div class="scroll"><table><thead><tr><th>Export job</th><th>Split</th><th>Role</th><th>Filename</th><th>Size</th><th>Download</th></tr></thead><tbody>
+{% for file in files %}<tr><td class="fixed">{{ file.export_job_id }}</td><td class="split {{ file.split or '' }}">{{ file.split or 'index' }}</td><td>{{ file.role }}</td><td>{{ file.filename }}</td><td>{{ '%.1f'|format(file.size_bytes/1048576) }} MB</td><td><a href="/download/{{ file.id }}">Download</a></td></tr>{% endfor %}
+</tbody></table></div></section>
 </div></div></body></html>

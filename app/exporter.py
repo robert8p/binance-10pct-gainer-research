@@ -1,71 +1,23 @@
 from __future__ import annotations
 
+from bisect import bisect_left
 import csv
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 import hashlib
 import json
-import math
 from pathlib import Path
-import sqlite3
 import shutil
+import sqlite3
 import uuid
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from .config import Settings
 from .db import connect
 from .models import Kline
-from .raw_evidence import decimal_text, quality_record
 from .storage import upload, verify_upload
 
-UTC = timezone.utc
-EVENT_GROUPS_PER_SHARD = 50
-
-SAMPLE_FIELDS = [
-    'sample_id', 'event_id', 'control_id', 'symbol', 'base_asset', 'quote_asset',
-    'anchor_time', 'sample_kind', 'control_rank', 'control_selection_basis',
-]
-OUTCOME_FIELDS = [
-    'sample_id', 'event_id', 'sample_kind', 'did_10pct_event_occur',
-    'crossing_time', 'minutes_to_cross', 'gain_pct', 'exit_quote_notional',
-    'saleable', 'saleability_source',
-]
-WINDOW_FIELDS = [
-    'sample_id', 'source_role', 'source_symbol', 'interval_minutes',
-    'window_start_time', 'anchor_time_exclusive',
-]
-QUALITY_FIELDS = [
-    'sample_id', 'label', 'event_id', 'source_role', 'source_symbol',
-    'interval_minutes', 'target_minutes', 'target_bar_count', 'actual_bar_count',
-    'coverage_ratio', 'first_open_time', 'last_close_time', 'gap_count',
-    'duplicate_count', 'non_monotonic_count', 'complete_enough',
-]
-
-
-def event_splits(events: list[dict[str, object]]) -> dict[str, list[str]]:
-    ordered = sorted(events, key=lambda row: str(row.get('baseline_time', '')))
-    event_ids = [str(row['id']) for row in ordered]
-    n = len(event_ids)
-    if n < 5:
-        return {'discovery': event_ids, 'validation': [], 'sealed_test': []}
-    discovery_n = max(1, math.floor(n * 0.60))
-    validation_n = max(1, math.floor(n * 0.20))
-    if discovery_n + validation_n >= n:
-        validation_n = 1
-        discovery_n = n - 2
-    return {
-        'discovery': event_ids[:discovery_n],
-        'validation': event_ids[discovery_n:discovery_n + validation_n],
-        'sealed_test': event_ids[discovery_n + validation_n:],
-    }
-
-
-# Backwards-compatible helper retained for tests and old callers.
-def _event_splits(sample_rows: list[dict[str, object]]) -> dict[str, set[str]]:
-    events = [
-        {'id': row['event_id'], 'baseline_time': row.get('anchor_time')}
-        for row in sample_rows if row.get('label') == 'event'
-    ]
-    return {key: set(value) for key, value in event_splits(events).items()}
+SUBJECTS_PER_SHARD = 8
+SPLITS = ('discovery', 'validation', 'sealed_test')
 
 
 def _sha256_file(path: Path, chunk_size: int = 8 * 1024 * 1024) -> str:
@@ -77,7 +29,6 @@ def _sha256_file(path: Path, chunk_size: int = 8 * 1024 * 1024) -> str:
 
 
 def _zip_folder(folder: Path, output: Path) -> str:
-    # Stream the archive hash rather than reading a potentially multi-GB ZIP into RAM.
     with ZipFile(output, 'w', ZIP_DEFLATED, compresslevel=9, allowZip64=True) as archive:
         for path in sorted(folder.rglob('*')):
             if path.is_file():
@@ -85,432 +36,423 @@ def _zip_folder(folder: Path, output: Path) -> str:
     return _sha256_file(output)
 
 
-def _delete_local_package(folder: Path, archive: Path) -> None:
-    # Evidence is durable in Supabase after _register_upload returns. Remove both
-    # the uncompressed shard and its ZIP immediately so later parts do not fill
-    # the persistent Render disk.
+def _delete_local(folder: Path, archive: Path) -> None:
     archive.unlink(missing_ok=True)
     shutil.rmtree(folder, ignore_errors=True)
 
 
 def _register_upload(
     settings: Settings,
-    context_job_id: str,
+    export_job_id: str,
     local_path: Path,
     storage_path: str,
     digest: str,
     role: str,
+    split: str | None,
 ) -> dict[str, object]:
-    expected_size = local_path.stat().st_size
+    size = local_path.stat().st_size
     upload(settings, local_path, storage_path)
-    verify_upload(settings, storage_path, expected_size)
+    verify_upload(settings, storage_path, size)
     with connect(settings) as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                insert into binance10_files(context_job_id, storage_path, filename, size_bytes, sha256, content_type, role)
-                values (%s,%s,%s,%s,%s,'application/zip',%s)
-                on conflict (context_job_id, storage_path) do update
-                  set size_bytes=excluded.size_bytes, sha256=excluded.sha256, role=excluded.role
+                insert into binance10_grid_files(
+                  export_job_id,storage_path,filename,size_bytes,sha256,content_type,role,split
+                ) values (%s,%s,%s,%s,%s,'application/zip',%s,%s)
+                on conflict (export_job_id,storage_path) do update
+                  set size_bytes=excluded.size_bytes,sha256=excluded.sha256,role=excluded.role,split=excluded.split
                 """,
-                (context_job_id, storage_path, local_path.name, expected_size, digest, role),
+                (export_job_id, storage_path, local_path.name, size, digest, role, split),
             )
         conn.commit()
     return {
-        'role': role,
         'filename': local_path.name,
         'storage_path': storage_path,
-        'size_bytes': expected_size,
+        'size_bytes': size,
         'sha256': digest,
+        'role': role,
+        'split': split,
     }
 
 
-def _chunks(values: list[str], size: int) -> list[list[str]]:
-    return [values[index:index + size] for index in range(0, len(values), size)] or [[]]
-
-
-def _create_sqlite(path: Path) -> sqlite3.Connection:
+def _create_subject_db(path: Path) -> sqlite3.Connection:
     conn = sqlite3.connect(path)
     conn.execute('pragma journal_mode=WAL')
     conn.execute('pragma synchronous=NORMAL')
     conn.execute('pragma temp_store=MEMORY')
     conn.executescript(
         """
-        create table samples (
-          sample_id text primary key, event_id text not null, control_id text,
-          symbol text not null, base_asset text not null, quote_asset text not null,
-          anchor_time text not null, sample_kind text not null,
-          control_rank integer, control_selection_basis text
+        create table candidates (
+          candidate_id text primary key, symbol text not null, base_asset text not null,
+          quote_asset text not null, decision_time text not null, split text not null
         );
         create table outcomes (
-          sample_id text primary key, event_id text not null, sample_kind text not null,
-          did_10pct_event_occur integer not null, crossing_time text, minutes_to_cross integer,
-          gain_pct real, exit_quote_notional real, saleable integer not null, saleability_source text
+          candidate_id text primary key, entry_price text not null,
+          entry_quote_notional text not null, entry_trade_count integer not null,
+          entry_liquid integer not null, target_price text not null,
+          target_reached integer not null, crossing_minute text, minutes_to_cross integer,
+          max_forward_high text not null, max_forward_gain_pct text not null,
+          exit_quote_notional text not null, exit_trade_count integer not null,
+          exit_liquid integer not null, liquidity_assessment_complete integer not null,
+          actionable_10pct integer not null,
+          label_version text not null
         );
-        create table sample_windows (
-          sample_id text not null, source_role text not null, source_symbol text not null,
-          interval_minutes integer not null, window_start_time text not null,
-          anchor_time_exclusive text not null,
-          primary key(sample_id, source_role, source_symbol, interval_minutes)
+        create table candidate_windows (
+          candidate_id text not null, interval_minutes integer not null,
+          window_start_time text not null, decision_time_exclusive text not null,
+          primary key(candidate_id,interval_minutes)
         );
         create table bars (
-          source_symbol text not null, interval_minutes integer not null,
+          symbol text not null, interval_minutes integer not null,
           open_time text not null, close_time text not null,
           open text not null, high text not null, low text not null, close text not null,
           base_volume text not null, quote_volume text not null, trade_count integer not null,
           taker_buy_base_volume text not null, taker_buy_quote_volume text not null,
-          primary key(source_symbol, interval_minutes, open_time)
+          primary key(symbol,interval_minutes,open_time)
         ) without rowid;
-        create table quality (
-          sample_id text not null, label text not null, event_id text not null,
-          source_role text not null, source_symbol text not null, interval_minutes integer not null,
-          target_minutes integer not null, target_bar_count integer not null,
-          actual_bar_count integer not null, coverage_ratio real not null,
-          first_open_time text, last_close_time text, gap_count integer not null,
-          duplicate_count integer not null, non_monotonic_count integer not null,
-          complete_enough integer not null,
-          primary key(sample_id, source_role, source_symbol, interval_minutes)
+        create table candidate_quality (
+          candidate_id text not null, interval_minutes integer not null,
+          expected_bar_count integer not null, actual_bar_count integer not null,
+          coverage_ratio real not null, complete_enough integer not null,
+          primary key(candidate_id,interval_minutes)
         );
-        create index idx_windows_sample on sample_windows(sample_id);
-        create index idx_bars_lookup on bars(source_symbol, interval_minutes, open_time);
-        create index idx_quality_sample on quality(sample_id);
-        create view sample_bars as
-        select
-          w.sample_id, w.source_role, w.source_symbol, w.interval_minutes,
-          b.open_time, b.close_time, b.open, b.high, b.low, b.close,
-          b.base_volume, b.quote_volume, b.trade_count,
-          b.taker_buy_base_volume, b.taker_buy_quote_volume
-        from sample_windows w
-        join bars b
-          on b.source_symbol = w.source_symbol
-         and b.interval_minutes = w.interval_minutes
-         and b.open_time >= w.window_start_time
-         and b.close_time < w.anchor_time_exclusive;
+        create index idx_candidates_time on candidates(symbol,decision_time);
+        create index idx_bars_lookup on bars(symbol,interval_minutes,open_time);
+        create view candidate_bars as
+        select c.candidate_id,c.symbol,w.interval_minutes,b.open_time,b.close_time,
+               b.open,b.high,b.low,b.close,b.base_volume,b.quote_volume,b.trade_count,
+               b.taker_buy_base_volume,b.taker_buy_quote_volume
+          from candidates c
+          join candidate_windows w on w.candidate_id=c.candidate_id
+          join bars b on b.symbol=c.symbol and b.interval_minutes=w.interval_minutes
+                     and b.open_time>=w.window_start_time
+                     and b.close_time<w.decision_time_exclusive;
         """
     )
     return conn
 
 
-def _write_query_csv(conn: sqlite3.Connection, path: Path, query: str, fields: list[str]) -> None:
+def _create_ledger_db(path: Path) -> sqlite3.Connection:
+    conn = sqlite3.connect(path)
+    conn.execute('pragma journal_mode=WAL')
+    conn.execute('pragma synchronous=NORMAL')
+    conn.executescript(
+        """
+        create table candidates (
+          candidate_id text primary key, symbol text not null, base_asset text not null,
+          quote_asset text not null, decision_time text not null, split text not null
+        );
+        create table outcomes (
+          candidate_id text primary key, entry_price text not null,
+          entry_quote_notional text not null, entry_trade_count integer not null,
+          entry_liquid integer not null, target_price text not null,
+          target_reached integer not null, crossing_minute text, minutes_to_cross integer,
+          max_forward_high text not null, max_forward_gain_pct text not null,
+          exit_quote_notional text not null, exit_trade_count integer not null,
+          exit_liquid integer not null, liquidity_assessment_complete integer not null,
+          actionable_10pct integer not null,
+          label_version text not null
+        );
+        create index idx_candidates_symbol_time on candidates(symbol,decision_time);
+        create index idx_outcomes_label on outcomes(actionable_10pct,target_reached);
+        """
+    )
+    return conn
+
+
+def _create_market_db(path: Path) -> sqlite3.Connection:
+    conn = sqlite3.connect(path)
+    conn.execute('pragma journal_mode=WAL')
+    conn.execute('pragma synchronous=NORMAL')
+    conn.executescript(
+        """
+        create table decision_times (decision_time text primary key);
+        create table market_windows (
+          decision_time text not null, symbol text not null, interval_minutes integer not null,
+          window_start_time text not null, decision_time_exclusive text not null,
+          primary key(decision_time,symbol,interval_minutes)
+        );
+        create table bars (
+          symbol text not null, interval_minutes integer not null,
+          open_time text not null, close_time text not null,
+          open text not null, high text not null, low text not null, close text not null,
+          base_volume text not null, quote_volume text not null, trade_count integer not null,
+          taker_buy_base_volume text not null, taker_buy_quote_volume text not null,
+          primary key(symbol,interval_minutes,open_time)
+        ) without rowid;
+        create index idx_market_bars on bars(symbol,interval_minutes,open_time);
+        create view market_decision_bars as
+        select w.decision_time,w.symbol,w.interval_minutes,b.open_time,b.close_time,
+               b.open,b.high,b.low,b.close,b.base_volume,b.quote_volume,b.trade_count,
+               b.taker_buy_base_volume,b.taker_buy_quote_volume
+          from market_windows w
+          join bars b on b.symbol=w.symbol and b.interval_minutes=w.interval_minutes
+                     and b.open_time>=w.window_start_time
+                     and b.close_time<w.decision_time_exclusive;
+        """
+    )
+    return conn
+
+
+def _bar_tuple(symbol: str, interval: int, bar: Kline) -> tuple[object, ...]:
+    return (
+        symbol, interval, bar.open_time.isoformat(), bar.close_time.isoformat(),
+        format(bar.open, 'f'), format(bar.high, 'f'), format(bar.low, 'f'), format(bar.close, 'f'),
+        format(bar.volume, 'f'), format(bar.quote_volume, 'f'), bar.trades,
+        format(bar.taker_buy_base, 'f'), format(bar.taker_buy_quote, 'f'),
+    )
+
+
+def _candidate_rows(row: dict) -> tuple[tuple[object, ...], tuple[object, ...]]:
+    candidate = (
+        str(row['id']), row['symbol'], row['base_asset'], row['quote_asset'],
+        row['decision_time'].isoformat(), row['split'],
+    )
+    outcome = (
+        str(row['id']), format(row['entry_price'], 'f'), format(row['entry_quote_notional'], 'f'),
+        int(row['entry_trade_count']), int(bool(row['entry_liquid'])), format(row['target_price'], 'f'),
+        int(bool(row['target_reached'])), row['crossing_minute'].isoformat() if row['crossing_minute'] else None,
+        row['minutes_to_cross'], format(row['max_forward_high'], 'f'),
+        format(row['max_forward_gain_pct'], 'f'), format(row['exit_quote_notional'], 'f'),
+        int(row['exit_trade_count']), int(bool(row['exit_liquid'])), int(bool(row['liquidity_assessment_complete'])),
+        int(bool(row['actionable_10pct'])), row['label_version'],
+    )
+    return candidate, outcome
+
+
+def _window_count(times: list[datetime], start: datetime, end: datetime) -> int:
+    return bisect_left(times, end) - bisect_left(times, start)
+
+
+def _write_csv(conn: sqlite3.Connection, path: Path, query: str) -> None:
+    cursor = conn.execute(query)
+    names = [item[0] for item in cursor.description]
     with path.open('w', newline='', encoding='utf-8') as handle:
         writer = csv.writer(handle)
-        writer.writerow(fields)
-        for row in conn.execute(query):
-            writer.writerow(row)
+        writer.writerow(names)
+        writer.writerows(cursor)
 
 
-class _Shard:
-    def __init__(self, folder: Path, split: str, part: int, event_ids: list[str]) -> None:
-        self.folder = folder
-        self.split = split
-        self.part = part
-        self.event_ids = set(event_ids)
-        self.folder.mkdir(parents=True, exist_ok=True)
-        self.db_path = self.folder / 'raw_evidence.sqlite'
-        self.conn = _create_sqlite(self.db_path)
-        self.sample_count = 0
-        self.bar_reference_count = 0
-        self.quality_count = 0
-
-    def add_sample(
-        self,
-        *,
-        sample: dict[str, object],
-        outcome: dict[str, object],
-        subject_15m: list[Kline],
-        subject_1m: list[Kline],
-        market_15m: dict[str, list[Kline]],
-        market_1m: dict[str, list[Kline]],
-    ) -> int:
-        self.conn.execute(
-            'insert into samples values (?,?,?,?,?,?,?,?,?,?)',
-            tuple(sample.get(field) for field in SAMPLE_FIELDS),
-        )
-        self.conn.execute(
-            'insert into outcomes values (?,?,?,?,?,?,?,?,?,?)',
-            (
-                outcome.get('sample_id'), outcome.get('event_id'), outcome.get('sample_kind'),
-                int(bool(outcome.get('did_10pct_event_occur'))), outcome.get('crossing_time'),
-                outcome.get('minutes_to_cross'), outcome.get('gain_pct'),
-                outcome.get('exit_quote_notional'), int(bool(outcome.get('saleable'))),
-                outcome.get('saleability_source'),
-            ),
-        )
-        self.sample_count += 1
-        sample_id = str(sample['sample_id'])
-        event_id = str(sample['event_id'])
-        label = str(sample['sample_kind'])
-        anchor = str(sample['anchor_time'])
-        linked_rows = 0
-
-        datasets = [
-            ('subject', str(sample['symbol']), 15, 10 * 24 * 60, subject_15m),
-            ('subject', str(sample['symbol']), 1, 48 * 60, subject_1m),
-            *[('market_reference', symbol, 15, 10 * 24 * 60, bars) for symbol, bars in market_15m.items()],
-            *[('market_reference', symbol, 1, 48 * 60, bars) for symbol, bars in market_1m.items()],
-        ]
-        for source_role, source_symbol, interval, target_minutes, bars in datasets:
-            window_start = (
-                datetime.fromisoformat(anchor) - timedelta(minutes=target_minutes)
-            ).isoformat()
-            self.conn.execute(
-                'insert into sample_windows values (?,?,?,?,?,?)',
-                (sample_id, source_role, source_symbol, interval, window_start, anchor),
-            )
-            self.conn.executemany(
-                'insert or ignore into bars values (?,?,?,?,?,?,?,?,?,?,?,?,?)',
-                [
-                    (
-                        source_symbol, interval, bar.open_time.isoformat(), bar.close_time.isoformat(),
-                        decimal_text(bar.open), decimal_text(bar.high), decimal_text(bar.low),
-                        decimal_text(bar.close), decimal_text(bar.volume), decimal_text(bar.quote_volume),
-                        bar.trades, decimal_text(bar.taker_buy_base), decimal_text(bar.taker_buy_quote),
-                    )
-                    for bar in bars
-                ],
-            )
-            q = quality_record(
-                sample_id=sample_id, label=label, event_id=event_id,
-                source_role=source_role, source_symbol=source_symbol,
-                interval_minutes=interval, target_minutes=target_minutes, bars=bars,
-            )
-            self.conn.execute(
-                'insert into quality values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-                (
-                    q['sample_id'], q['label'], q['event_id'], q['source_role'], q['source_symbol'],
-                    q['interval_minutes'], q['target_minutes'], q['target_bar_count'],
-                    q['actual_bar_count'], q['coverage_ratio'], q['first_open_time'],
-                    q['last_close_time'], q['gap_count'], q['duplicate_count'],
-                    q['non_monotonic_count'], int(bool(q['complete_enough'])),
-                ),
-            )
-            linked_rows += len(bars)
-            self.quality_count += 1
-        self.bar_reference_count += linked_rows
-        self.conn.commit()
-        return linked_rows
-
-    def finalise_files(self, metadata: dict[str, object]) -> dict[str, int]:
-        self.conn.execute('pragma wal_checkpoint(TRUNCATE)')
-        unique_bar_rows = int(self.conn.execute('select count(*) from bars').fetchone()[0])
-        _write_query_csv(self.conn, self.folder / 'samples.csv', 'select * from samples order by anchor_time,sample_id', SAMPLE_FIELDS)
-        _write_query_csv(self.conn, self.folder / 'outcomes.csv', 'select * from outcomes order by sample_id', OUTCOME_FIELDS)
-        _write_query_csv(
-            self.conn, self.folder / 'sample_windows.csv',
-            'select * from sample_windows order by sample_id,source_role,source_symbol,interval_minutes',
-            WINDOW_FIELDS,
-        )
-        _write_query_csv(
-            self.conn, self.folder / 'quality.csv',
-            'select * from quality order by sample_id,source_role,source_symbol,interval_minutes',
-            QUALITY_FIELDS,
-        )
-        counts = {
-            'event_group_count': len(self.event_ids),
-            'sample_count': self.sample_count,
-            'sample_bar_reference_count': self.bar_reference_count,
-            'unique_bar_rows': unique_bar_rows,
-            'quality_row_count': self.quality_count,
-        }
-        (self.folder / 'protocol.json').write_text(
-            json.dumps({**metadata, 'split': self.split, 'part': self.part, 'counts': counts}, indent=2, default=str),
-            encoding='utf-8',
-        )
-        (self.folder / 'README.txt').write_text(_split_readme(self.split), encoding='utf-8')
-        (self.folder / 'CHATGPT_ANALYSIS_PROTOCOL.md').write_text(
-            _chatgpt_protocol(self.split), encoding='utf-8'
-        )
-        self.conn.close()
-        return counts
-
-
-class RawEvidencePackageBuilder:
-    """Write normalised raw evidence to sharded SQLite packages."""
-
-    def __init__(
-        self,
-        settings: Settings,
-        context_job_id: str,
-        events: list[dict[str, object]],
-        metadata: dict[str, object],
-    ) -> None:
+class GridEvidencePackageBuilder:
+    def __init__(self, settings: Settings, export_job_id: str, metadata: dict[str, object]) -> None:
         self.settings = settings
-        self.context_job_id = context_job_id
+        self.export_job_id = export_job_id
         self.attempt_id = uuid.uuid4().hex
-        self.storage_prefix = f'raw-evidence/{context_job_id}/attempt_{self.attempt_id}'
-        self.metadata = {
-            **metadata,
-            'export_attempt_id': self.attempt_id,
-            'storage_prefix': self.storage_prefix,
-        }
-        self.root = settings.temp_data_dir / 'exports' / context_job_id
+        self.storage_prefix = f'grid-evidence/{export_job_id}/attempt_{self.attempt_id}'
+        self.metadata = {**metadata, 'export_attempt_id': self.attempt_id, 'storage_prefix': self.storage_prefix}
+        self.root = settings.temp_data_dir / 'grid_exports' / export_job_id
         if self.root.exists():
             shutil.rmtree(self.root)
         self.root.mkdir(parents=True, exist_ok=True)
-        self.split_map = event_splits(events)
-        self.shards: dict[tuple[str, int], _Shard] = {}
-        self.event_target: dict[str, tuple[str, int]] = {}
-        for split, event_ids in self.split_map.items():
-            for part, group in enumerate(_chunks(event_ids, EVENT_GROUPS_PER_SHARD), start=1):
-                folder = self.root / f'{split}_part_{part:03d}'
-                shard = _Shard(folder, split, part, group)
-                self.shards[(split, part)] = shard
-                for event_id in group:
-                    self.event_target[event_id] = (split, part)
+        self.outputs: list[dict[str, object]] = []
+        self.manifest: dict[str, list[dict[str, object]]] = {split: [] for split in SPLITS}
 
-    def add_sample(
-        self,
-        *,
-        sample: dict[str, object],
-        outcome: dict[str, object],
-        subject_15m: list[Kline],
-        subject_1m: list[Kline],
-        market_15m: dict[str, list[Kline]],
-        market_1m: dict[str, list[Kline]],
-    ) -> int:
-        event_id = str(sample['event_id'])
-        try:
-            target = self.event_target[event_id]
-        except KeyError as exc:
-            raise RuntimeError(f'No evidence split assigned for event {event_id}') from exc
-        return self.shards[target].add_sample(
-            sample=sample,
-            outcome=outcome,
-            subject_15m=subject_15m,
-            subject_1m=subject_1m,
-            market_15m=market_15m,
-            market_1m=market_1m,
+    def _package(self, folder: Path, filename: str, role: str, split: str | None) -> dict[str, object]:
+        zip_path = self.root / filename
+        digest = _zip_folder(folder, zip_path)
+        record = _register_upload(
+            self.settings, self.export_job_id, zip_path,
+            f'{self.storage_prefix}/{filename}', digest, role, split,
         )
+        self.outputs.append(record)
+        if split:
+            self.manifest[split].append(record)
+        _delete_local(folder, zip_path)
+        return record
 
-    def finalise(self) -> list[dict[str, object]]:
-        outputs: list[dict[str, object]] = []
-        split_manifests: dict[str, list[dict[str, object]]] = {key: [] for key in self.split_map}
-        parts_by_split = {split: sum(1 for key in self.shards if key[0] == split) for split in self.split_map}
-        for (split, part), shard in sorted(self.shards.items()):
-            counts = shard.finalise_files(self.metadata)
-            filename = _package_filename(split, part, parts_by_split[split])
-            zip_path = self.root / filename
-            digest = _zip_folder(shard.folder, zip_path)
-            storage_path = f'{self.storage_prefix}/{filename}'
-            role = split if parts_by_split[split] == 1 else f'{split}_part_{part:03d}'
-            record = _register_upload(
-                self.settings, self.context_job_id, zip_path, storage_path, digest, role
-            )
-            outputs.append(record)
-            split_manifests[split].append({
-                'part': part,
-                'filename': filename,
-                'size_bytes': record['size_bytes'],
-                'sha256': digest,
-                **counts,
-            })
-            _delete_local_package(shard.folder, zip_path)
-
-        discovery_files = [part['filename'] for part in split_manifests['discovery']]
-        validation_files = [part['filename'] for part in split_manifests['validation']]
-        sealed_files = [part['filename'] for part in split_manifests['sealed_test']]
-        index_folder = self.root / 'index'
-        index_folder.mkdir(parents=True, exist_ok=True)
-        index_payload = {
-            **self.metadata,
-            'shard_size_event_groups': EVENT_GROUPS_PER_SHARD,
-            'splits': split_manifests,
-            'files_inside_each_evidence_package': {
-                'raw_evidence.sqlite': 'Normalised raw bars, samples, outcomes, sample windows, quality tables and a lookahead-safe sample_bars view.',
-                'samples.csv': 'Small human-readable sample index.',
-                'outcomes.csv': 'Labels and outcomes, separate from raw predictor bars.',
-                'sample_windows.csv': 'Exact point-in-time windows ChatGPT must use for each sample.',
-                'quality.csv': 'Coverage, gaps, duplicates and monotonicity checks.',
-            },
-            'instructions': {
-                'first_review': ['binance10_index.zip', *discovery_files],
-                'analysis_owner': 'ChatGPT derives features, finds patterns and interprets evidence.',
-                'application_boundary': 'The app detects events, selects neutral controls and packages raw evidence only.',
-                'validation_files': validation_files,
-                'validation': 'Open only after discovery rules and acceptance criteria are frozen.',
-                'sealed_test_files': sealed_files,
-                'sealed_test': 'Do not open until validation passes without retuning.',
-            },
+    def add_ledger(self, split: str, candidates) -> dict[str, object]:
+        folder = self.root / f'{split}_ledger'
+        folder.mkdir(parents=True, exist_ok=True)
+        conn = _create_ledger_db(folder / 'candidate_ledger.sqlite')
+        count = target_count = actionable_count = 0
+        symbols: set[str] = set()
+        candidate_batch: list[tuple[object, ...]] = []
+        outcome_batch: list[tuple[object, ...]] = []
+        for row in candidates:
+            candidate_row, outcome_row = _candidate_rows(row)
+            candidate_batch.append(candidate_row)
+            outcome_batch.append(outcome_row)
+            count += 1
+            target_count += int(bool(row['target_reached']))
+            actionable_count += int(bool(row['actionable_10pct']))
+            symbols.add(str(row['symbol']))
+            if len(candidate_batch) >= 5000:
+                conn.executemany('insert into candidates values (?,?,?,?,?,?)', candidate_batch)
+                conn.executemany('insert into outcomes values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', outcome_batch)
+                conn.commit()
+                candidate_batch.clear()
+                outcome_batch.clear()
+        if candidate_batch:
+            conn.executemany('insert into candidates values (?,?,?,?,?,?)', candidate_batch)
+            conn.executemany('insert into outcomes values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', outcome_batch)
+            conn.commit()
+        _write_csv(conn, folder / 'candidates.csv', 'select * from candidates order by decision_time,symbol')
+        _write_csv(conn, folder / 'outcomes.csv', 'select * from outcomes order by candidate_id')
+        counts = {
+            'candidates': count,
+            'target_reached': target_count,
+            'actionable_10pct': actionable_count,
+            'symbols': len(symbols),
         }
-        (index_folder / 'manifest.json').write_text(
-            json.dumps(index_payload, indent=2, default=str), encoding='utf-8'
-        )
-        (index_folder / 'README.txt').write_text(
-            'Upload this index and every discovery part to ChatGPT first. The app has not engineered predictors or identified patterns.\n',
+        (folder / 'protocol.json').write_text(
+            json.dumps({**self.metadata, 'split': split, 'package_role': 'complete_candidate_ledger', 'counts': counts}, indent=2, default=str),
             encoding='utf-8',
         )
-        (index_folder / 'CHATGPT_ANALYSIS_PROTOCOL.md').write_text(
-            _chatgpt_protocol('index'), encoding='utf-8'
+        (folder / 'README.txt').write_text(
+            'Complete candidate denominator for this chronological split. Outcomes are separated from predictor bars. '
+            'Do not use outcome columns as predictors.\n', encoding='utf-8',
         )
-        index_path = self.root / 'binance10_index.zip'
-        index_digest = _zip_folder(index_folder, index_path)
-        index_record = _register_upload(
-            self.settings,
-            self.context_job_id,
-            index_path,
-            f'{self.storage_prefix}/binance10_index.zip',
-            index_digest,
-            'index',
+        conn.close()
+        return self._package(folder, f'binance10_{split}_ledger.zip', f'{split}_ledger', split)
+
+    def add_market(
+        self,
+        split: str,
+        decision_times: list[datetime],
+        bars_by_symbol_interval: dict[tuple[str, int], list[Kline]],
+        *,
+        prior_days: int,
+        high_res_hours: int,
+    ) -> dict[str, object]:
+        folder = self.root / f'{split}_market'
+        folder.mkdir(parents=True, exist_ok=True)
+        conn = _create_market_db(folder / 'market_context.sqlite')
+        unique_times = sorted(set(decision_times))
+        conn.executemany('insert into decision_times values (?)', [(value.isoformat(),) for value in unique_times])
+        windows: list[tuple[object, ...]] = []
+        for decision in unique_times:
+            for symbol, interval in bars_by_symbol_interval:
+                history = timedelta(days=prior_days) if interval == 15 else timedelta(hours=high_res_hours)
+                windows.append((decision.isoformat(), symbol, interval, (decision - history).isoformat(), decision.isoformat()))
+        conn.executemany('insert into market_windows values (?,?,?,?,?)', windows)
+        rows = []
+        for (symbol, interval), bars in bars_by_symbol_interval.items():
+            rows.extend(_bar_tuple(symbol, interval, bar) for bar in bars)
+        conn.executemany('insert or ignore into bars values (?,?,?,?,?,?,?,?,?,?,?,?,?)', rows)
+        conn.commit()
+        counts = {
+            'unique_decision_times': len(unique_times),
+            'unique_bar_rows': int(conn.execute('select count(*) from bars').fetchone()[0]),
+            'symbols': sorted({key[0] for key in bars_by_symbol_interval}),
+        }
+        (folder / 'protocol.json').write_text(
+            json.dumps({**self.metadata, 'split': split, 'package_role': 'market_context', 'counts': counts}, indent=2, default=str),
+            encoding='utf-8',
         )
-        outputs.insert(0, index_record)
-        _delete_local_package(index_folder, index_path)
-        # The job-specific directory should now be empty. Removing it prevents
-        # stale partial artefacts from accumulating across runs.
+        (folder / 'README.txt').write_text(
+            'BTC, ETH and BNB raw context stored once. Use market_decision_bars for strict pre-decision windows.\n',
+            encoding='utf-8',
+        )
+        conn.close()
+        return self._package(folder, f'binance10_{split}_market.zip', f'{split}_market', split)
+
+    def add_subject_shard(
+        self,
+        split: str,
+        part: int,
+        candidates: list[dict],
+        bars_by_symbol_interval: dict[tuple[str, int], list[Kline]],
+        *,
+        prior_days: int,
+        high_res_hours: int,
+    ) -> dict[str, object]:
+        folder = self.root / f'{split}_subject_{part:03d}'
+        folder.mkdir(parents=True, exist_ok=True)
+        conn = _create_subject_db(folder / 'subject_evidence.sqlite')
+        candidate_rows, outcome_rows = zip(*(_candidate_rows(row) for row in candidates)) if candidates else ([], [])
+        conn.executemany('insert into candidates values (?,?,?,?,?,?)', candidate_rows)
+        conn.executemany('insert into outcomes values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', outcome_rows)
+        bars_times: dict[tuple[str, int], list[datetime]] = {}
+        bar_rows: list[tuple[object, ...]] = []
+        for key, bars in bars_by_symbol_interval.items():
+            bars_times[key] = [bar.open_time for bar in bars]
+            bar_rows.extend(_bar_tuple(key[0], key[1], bar) for bar in bars)
+        conn.executemany('insert or ignore into bars values (?,?,?,?,?,?,?,?,?,?,?,?,?)', bar_rows)
+        windows: list[tuple[object, ...]] = []
+        quality: list[tuple[object, ...]] = []
+        for row in candidates:
+            candidate_id = str(row['id'])
+            decision = row['decision_time']
+            symbol = row['symbol']
+            for interval, history, expected in (
+                (15, timedelta(days=prior_days), prior_days * 24 * 4),
+                (1, timedelta(hours=high_res_hours), high_res_hours * 60),
+            ):
+                start = decision - history
+                windows.append((candidate_id, interval, start.isoformat(), decision.isoformat()))
+                actual = _window_count(bars_times.get((symbol, interval), []), start, decision)
+                ratio = actual / expected if expected else 0.0
+                quality.append((candidate_id, interval, expected, actual, round(ratio, 6), int(ratio >= 0.98)))
+        conn.executemany('insert into candidate_windows values (?,?,?,?)', windows)
+        conn.executemany('insert into candidate_quality values (?,?,?,?,?,?)', quality)
+        conn.commit()
+        _write_csv(conn, folder / 'candidates.csv', 'select * from candidates order by decision_time,symbol')
+        _write_csv(conn, folder / 'outcomes.csv', 'select * from outcomes order by candidate_id')
+        _write_csv(conn, folder / 'candidate_quality.csv', 'select * from candidate_quality order by candidate_id,interval_minutes')
+        counts = {
+            'candidates': len(candidates),
+            'symbols': sorted({row['symbol'] for row in candidates}),
+            'unique_bar_rows': int(conn.execute('select count(*) from bars').fetchone()[0]),
+            'complete_15m_candidates': int(conn.execute('select count(*) from candidate_quality where interval_minutes=15 and complete_enough=1').fetchone()[0]),
+            'complete_1m_candidates': int(conn.execute('select count(*) from candidate_quality where interval_minutes=1 and complete_enough=1').fetchone()[0]),
+        }
+        (folder / 'protocol.json').write_text(
+            json.dumps({**self.metadata, 'split': split, 'part': part, 'package_role': 'subject_raw_evidence', 'counts': counts}, indent=2, default=str),
+            encoding='utf-8',
+        )
+        (folder / 'CHATGPT_ANALYSIS_PROTOCOL.md').write_text(_analysis_protocol(split), encoding='utf-8')
+        conn.close()
+        filename = (
+            f'SEALED_TEST_DO_NOT_OPEN_subject_part_{part:03d}.zip'
+            if split == 'sealed_test'
+            else f'binance10_{split}_subject_part_{part:03d}.zip'
+        )
+        return self._package(folder, filename, f'{split}_subject_part_{part:03d}', split)
+
+    def finalise(self, split_counts: dict[str, dict[str, object]]) -> list[dict[str, object]]:
+        folder = self.root / 'index'
+        folder.mkdir(parents=True, exist_ok=True)
+        payload = {
+            **self.metadata,
+            'protocol_version': 'binance10_v1_2_executable_grid',
+            'subject_symbols_per_shard': SUBJECTS_PER_SHARD,
+            'split_counts': split_counts,
+            'files': self.manifest,
+            'discovery_upload_order': [
+                item['filename'] for item in self.manifest['discovery']
+            ],
+            'instructions': {
+                'discovery': 'Upload the index and every discovery file only.',
+                'validation': 'Do not open until rules and acceptance criteria are frozen.',
+                'sealed_test': 'Do not open until validation passes without retuning.',
+                'analysis_owner': 'ChatGPT derives all predictor features and identifies patterns.',
+            },
+        }
+        (folder / 'manifest.json').write_text(json.dumps(payload, indent=2, default=str), encoding='utf-8')
+        (folder / 'README.txt').write_text(
+            'The candidate ledger contains every eligible 15-minute decision in each split. '
+            'The app has not selected controls or engineered predictor features.\n', encoding='utf-8',
+        )
+        (folder / 'CHATGPT_ANALYSIS_PROTOCOL.md').write_text(_analysis_protocol('index'), encoding='utf-8')
+        record = self._package(folder, 'binance10_index.zip', 'index', None)
+        self.outputs.insert(0, self.outputs.pop())
         try:
             self.root.rmdir()
         except OSError:
             pass
-        return outputs
+        return self.outputs
 
 
-def _package_filename(split: str, part: int, part_count: int) -> str:
+def _analysis_protocol(split: str) -> str:
     if split == 'sealed_test':
-        return 'SEALED_TEST_DO_NOT_OPEN.zip' if part_count == 1 else f'SEALED_TEST_DO_NOT_OPEN_part_{part:03d}.zip'
-    return f'binance10_{split}.zip' if part_count == 1 else f'binance10_{split}_part_{part:03d}.zip'
-
-
-def _split_readme(split: str) -> str:
-    if split == 'sealed_test':
-        return (
-            'SEALED TEST. Do not inspect this package until discovery rules, thresholds, exclusions and validation acceptance criteria are frozen, and validation has passed without retuning.\n'
-        )
+        return '# Sealed test\n\nDo not inspect until validation passes without rule changes.\n'
     return (
-        'This package contains normalised raw point-in-time evidence. The app has not engineered predictor features or selected a pattern. '
-        'Use sample_windows to retrieve bars for each sample; every window ends strictly before its anchor. Labels and outcomes are isolated from bars.\n'
-    )
-
-
-def _chatgpt_protocol(split: str) -> str:
-    opening = (
-        '# ChatGPT blank-canvas analysis protocol\n\n'
-        'The application has deliberately not identified patterns or calculated predictor features. '
-        'ChatGPT owns feature generation, hypothesis creation, testing and interpretation.\n\n'
-    )
-    if split == 'sealed_test':
-        return opening + (
-            'Do not inspect any file in this package until validation passes the frozen acceptance criteria without any rule or threshold changes.\n'
-        )
-    return opening + (
-        '## Reading the SQLite evidence\n\n'
-        '`bars` stores each exchange bar once. `sample_windows` maps each sample to its subject and market-reference history. '
-        'Use the prebuilt `sample_bars` view, which applies the correct window and strict pre-anchor cutoff automatically.\n\n'
-        '## Evidence boundaries\n\n'
-        '- Treat each event and its controls as one group when resampling or cross-validating.\n'
-        '- Do not use crossing time, minutes to cross, exit notional or any outcome as a predictor.\n'
-        '- Inspect quality before analysis and report exclusions transparently.\n'
-        '- Never read validation or sealed-test packages during discovery.\n\n'
-        '## Discovery work\n\n'
-        '1. Inspect raw sequence shapes without assuming returns, volatility or volume are the correct representation.\n'
-        '2. Derive a broad candidate library from price path, volume path, trade count, taker imbalance, compression/expansion, acceleration, persistence, market-relative behaviour, timing and interactions.\n'
-        '3. Compare events with same-symbol controls and test whether findings recur across symbols and chronological subperiods.\n'
-        '4. Use grouped resampling and multiple-testing controls; reject findings driven by a few coins or observations.\n'
-        '5. Include realistic trigger timing, entry delay, fees, slippage sensitivity and no-trade frequency before calling a relationship actionable.\n'
-        '6. Produce a small set of understandable candidate rules with exact frozen definitions, thresholds, exclusions and acceptance criteria.\n'
-        '7. Do not open validation while changing discovery rules.\n\n'
-        '## Required discovery output\n\n'
-        '- Data-quality report and exclusions.\n'
-        '- All candidate families tested, including failures.\n'
-        '- Event-versus-control effect sizes and uncertainty.\n'
-        '- Stability by symbol, liquidity, market regime and time period.\n'
-        '- Frozen candidate-rule specification and validation acceptance criteria.\n'
+        '# ChatGPT-owned pattern discovery\n\n'
+        'The app generated one identical 15-minute decision grid for positives and negatives. '
+        'It used the interval open as the first executable trade-price benchmark and labelled whether +10% was reached within eight hours.\n\n'
+        'Use `candidate_bars` only for subject predictors and `market_decision_bars` for market context; both end strictly before the decision time. '
+        'Never use `outcomes` as predictor inputs. Assess data quality first. Derive features from raw sequences, report all candidate families tested, '
+        'control for repeated symbols/times and multiple testing, and calculate weighted or full-population precision, alerts per day, no-trade frequency, '
+        'fees and slippage. Freeze exact rules before validation.\n'
     )

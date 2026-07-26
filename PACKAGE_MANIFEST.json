@@ -1,10 +1,20 @@
 {
-  "package": "binance_10pct_gainer_research",
-  "version": "1.1.2",
-  "generated_date": "2026-07-26",
-  "research_boundary": "Application collects and quality-checks raw evidence; ChatGPT derives features and identifies patterns.",
-  "retry_safety": "Stale Supabase objects are deleted and verified before each rebuild; every upload attempt uses a unique prefix and persisted-size verification.",
-  "file_count_excluding_manifest": 35,
+  "package": "binance_10pct_gainer_research_v1_2_0",
+  "version": "1.2.0",
+  "protocol": "binance10_v1_2_executable_grid",
+  "tests_passed": 18,
+  "research_design": {
+    "decision_grid_minutes": 15,
+    "target_pct": 10,
+    "horizon_minutes": 480,
+    "entry_benchmark": "15-minute kline open; candidates require at least one trade",
+    "split": "chronological 60/20/20 with 8-hour embargoes",
+    "predictor_owner": "ChatGPT",
+    "complete_candidate_denominator": true,
+    "matched_controls": false,
+    "hindsight_local_low": false,
+    "missing_outcome_data_flagged": true
+  },
   "files": [
     {
       "path": ".dockerignore",
@@ -13,8 +23,8 @@
     },
     {
       "path": ".env.example",
-      "size_bytes": 253,
-      "sha256": "693b34b7a9d901238398b181b51ac13ae2a5ef0b550940cf7d06266ffc80b0fd"
+      "size_bytes": 299,
+      "sha256": "90ed6b12c1f8bad97c73ccd5f72e27b876fc73c15aebe09212f069b8447cc357"
     },
     {
       "path": ".github/workflows/tests.yml",
@@ -23,13 +33,13 @@
     },
     {
       "path": "CHANGELOG.md",
-      "size_bytes": 1999,
-      "sha256": "e9b69bb5569214a4ea87fb99ad5eb0cd68f842e775be668cc29712d88a09eadc"
+      "size_bytes": 1404,
+      "sha256": "bc132c1d9ea083011fec42dc3361225a1c4e3dc078f709755774cea25a58115d"
     },
     {
       "path": "DEPLOYMENT_GUIDE.md",
-      "size_bytes": 5956,
-      "sha256": "ea86ff7e2804e2c461cc76b27a94976d37ebb977fa88aa87833e66b27b4e2fea"
+      "size_bytes": 3076,
+      "sha256": "dfd7abca83bd73f3531d0b505d7ae34484c7c271442285d73b58d49e1f833bdd"
     },
     {
       "path": "Dockerfile",
@@ -38,18 +48,18 @@
     },
     {
       "path": "QUALITY_REPORT.md",
-      "size_bytes": 3238,
-      "sha256": "1d310f7b32ee7d74b83542c680b57dfa2bcede4618199ae67b7cd947a1ae657e"
+      "size_bytes": 1495,
+      "sha256": "501d7db85f4c085f18868f8e15a26bcd545615189e071baf1657c3e7d5569168"
     },
     {
       "path": "README.md",
-      "size_bytes": 5224,
-      "sha256": "dcf722d875fcc4472c7ac0012e63480c8953c619aabbeaff27facc5f07e5ce3e"
+      "size_bytes": 3363,
+      "sha256": "d06415b69d8ea966247a5386b1683661e73aff3ab631a1412af52efa76e3f31c"
     },
     {
       "path": "SOURCE_NOTES.md",
-      "size_bytes": 971,
-      "sha256": "cbc213069e85b74d1f288af42a693ee9d2d6eab71990614c20fd26ad5ed3dcf3"
+      "size_bytes": 824,
+      "sha256": "82896f59c0999348fbe7b056bd0cd55568f03fd0e33ca05f425d7361b2347bff"
     },
     {
       "path": "app/__init__.py",
@@ -59,17 +69,12 @@
     {
       "path": "app/binance.py",
       "size_bytes": 9499,
-      "sha256": "143dc6e6470f560a628ab4fe53707779c588b72f069643a8d72fae8e202d206f"
+      "sha256": "5492c2401a6598da989bfb4b796f62b4caa4133068e680b0a6ba1176290912a1"
     },
     {
       "path": "app/config.py",
       "size_bytes": 1631,
-      "sha256": "4136200ee7a77d0998255f96689b7b7158d58e3e7c765eb26bb39eb8f3756245"
-    },
-    {
-      "path": "app/controls.py",
-      "size_bytes": 3512,
-      "sha256": "efc019fe9a22ebe19fb6475c91d20e47092213d2a6d9392bef99ba933e7d8e3d"
+      "sha256": "b08bb331599280087bb9ee5f012738acf2869f625f1fc32ea5bffaacb9b1ecf4"
     },
     {
       "path": "app/db.py",
@@ -78,33 +83,33 @@
     },
     {
       "path": "app/exporter.py",
-      "size_bytes": 24158,
-      "sha256": "58546f7c8716eea46b79ba63fe5793ab54587f65eccb9000fac9172d88c06a26"
+      "size_bytes": 22688,
+      "sha256": "59050d4c2fc569a1b200b91524ad1bc860b6865a781b07fd788ee059eabac41c"
+    },
+    {
+      "path": "app/grid.py",
+      "size_bytes": 7076,
+      "sha256": "d0b4aaa9e9d14eb053602bb59b4c5def8faa536b01a4bc817033456966dea09c"
     },
     {
       "path": "app/jobs.py",
-      "size_bytes": 26478,
-      "sha256": "1ad188d279a3e4cba438764f0e33dd197bf1541d304fc59946393c450de5c6da"
+      "size_bytes": 22831,
+      "sha256": "adf321cb5c679eb3bf49695e777b4d1d65ed1cf506d3e583ca4b995f9bb345e8"
     },
     {
       "path": "app/main.py",
-      "size_bytes": 7391,
-      "sha256": "d8fa8f4d5d4b35abaf3a010ffa881d7bb225dbd9027bc2f2c21d1374826a9288"
+      "size_bytes": 7290,
+      "sha256": "930684d24cb76ea21381ca912867ac6302ec402199fd4a05b30bfa67c822ac54"
     },
     {
       "path": "app/models.py",
-      "size_bytes": 840,
-      "sha256": "f4c4b522d208b8e33743277f4484df365cc647cd360d1ee8194eb7486eca2fa6"
+      "size_bytes": 942,
+      "sha256": "f03ee650b6dd835106fb19475974726ac10640d4ce054f3ab3bcdc27860757ad"
     },
     {
-      "path": "app/raw_evidence.py",
-      "size_bytes": 3502,
-      "sha256": "7925b979d9484941c8ba27cf574928dc9500e313fe4d75bd611a35d38d21b919"
-    },
-    {
-      "path": "app/scanner.py",
-      "size_bytes": 5712,
-      "sha256": "887015b696f9f571a79f5535f95c75e4c0df404a05ab0ab16fbf7d3466fa7800"
+      "path": "app/protocol.py",
+      "size_bytes": 2437,
+      "sha256": "0176dc977f90135f19c2541ba4ff8f5d3c3d6c3c2c313ce6249d0e359cded75a"
     },
     {
       "path": "app/storage.py",
@@ -113,18 +118,18 @@
     },
     {
       "path": "app/templates/index.html",
-      "size_bytes": 6266,
-      "sha256": "57489b9108c7bb9ae43ed135a2b70042dd45755fb074d5b06e3f68e87fc69fc1"
+      "size_bytes": 6831,
+      "sha256": "c351bd591ae275b346189b971934b48b685eded88b436458717ada019fdbf135"
     },
     {
       "path": "app/worker.py",
-      "size_bytes": 570,
-      "sha256": "ab75d133406d34daeb9aafd8f493a691ef4e1a8e95231aa717b5be6260179f9e"
+      "size_bytes": 586,
+      "sha256": "686e530542e7c198a6c2d9e9c8854fc5e71a61aca7a12808024fab497a795313"
     },
     {
       "path": "render.yaml",
       "size_bytes": 962,
-      "sha256": "4bb23d26afbbaea3421b16add7f7fe1332ce88105ed12d672577240f3f597df2"
+      "sha256": "98b9afe1d7e44dc84adceab45fc71aa2e456f6af2447d8bf81ab75d9e0b3abe3"
     },
     {
       "path": "requirements.txt",
@@ -133,8 +138,8 @@
     },
     {
       "path": "supabase/schema.sql",
-      "size_bytes": 6407,
-      "sha256": "fd6152cbd7c33d50ea68d0e6872c28e48d07dae666e351a609f007ca604fbd45"
+      "size_bytes": 5830,
+      "sha256": "2551515e04d7832cc66849f9729ca2cd8a2f63b6451cbc1eb7c738b807ab466d"
     },
     {
       "path": "tests/test_binance.py",
@@ -142,34 +147,19 @@
       "sha256": "46efa93393cc236ab634a71a2486f8c27431cc9dcd463e09aa6704b7bbd85b67"
     },
     {
-      "path": "tests/test_candidates.py",
-      "size_bytes": 696,
-      "sha256": "a856fe805a5f48843f147413cc7c619f11c1b5848562bf99dfc0c290def9c0df"
-    },
-    {
-      "path": "tests/test_controls.py",
-      "size_bytes": 1104,
-      "sha256": "f674353a9b2f358576603456077a966e1bf73550e51c0232b318533b976af474"
-    },
-    {
       "path": "tests/test_exporter.py",
-      "size_bytes": 3973,
-      "sha256": "41cd5fcb36843582dc5dd59fa6af7b7518571e3f1373f0466dfe9588c590a5b5"
+      "size_bytes": 1944,
+      "sha256": "ceb0222f6a2b0fceebee57bb174add351594ef5e5622cbdf3b1c387c23d3bebb"
     },
     {
-      "path": "tests/test_raw_evidence.py",
-      "size_bytes": 1708,
-      "sha256": "68f49712363be4f660dfbbdaa70472ed2137e50fef1cebf2118dfdb83e820441"
+      "path": "tests/test_grid.py",
+      "size_bytes": 3737,
+      "sha256": "609db9bcb96388d681b00f88c5d899139f495676e78b2f844a163a1eaebbc9fb"
     },
     {
-      "path": "tests/test_saleability.py",
-      "size_bytes": 1044,
-      "sha256": "a09813656300d0a3551ec0f25fd38aed38b2dd60388a8f90d7421ea3d02f4f51"
-    },
-    {
-      "path": "tests/test_scanner.py",
-      "size_bytes": 1257,
-      "sha256": "b3bf177a8e21ccb64bac3f64953e4c5a7af7d3843c131933a1d4f3e13c907f1b"
+      "path": "tests/test_protocol.py",
+      "size_bytes": 980,
+      "sha256": "046a8dcfd097d5b6d76f1fd75e315c29643aca9399d190f75c12837718e79057"
     },
     {
       "path": "tests/test_storage.py",

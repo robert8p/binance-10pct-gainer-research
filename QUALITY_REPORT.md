@@ -1,52 +1,36 @@
-# Quality report — v1.1.2
+# Quality report — v1.2.0
 
-## Research-boundary checks
+## Automated validation
 
-- No predictor feature module is present.
-- No return, volatility, volume-ratio or technical-indicator matching is used for controls.
-- Controls are selected mechanically by symbol, UTC slot, weekday priority and calendar proximity.
-- Labels/outcomes are stored separately from raw bars.
-- Every evidence bar must close strictly before its sample anchor.
-- The anchor minute is excluded to prevent intra-minute leakage.
-- Event groups and their controls remain together across discovery, validation and sealed-test splits.
+- 18 tests passed.
+- All application and test Python files compile.
+- `render.yaml` parses as valid YAML.
+- ZIP integrity is checked after packaging.
 
-## Evidence integrity
+## Research-design tests
 
-- Raw decimal values are preserved as text in SQLite rather than rounded to binary floats.
-- Each bar is deduplicated by symbol, interval and open timestamp.
-- `sample_windows` defines the exact point-in-time evidence available to every sample.
-- The `sample_bars` view applies those windows automatically and cannot return a bar closing at or after the anchor.
-- `quality` records expected and actual bar counts, coverage, gaps, duplicates and non-monotonic timestamps.
-- BTCUSDT, ETHUSDT and BNBUSDT context uses the same point-in-time cutoff as the subject.
-- Large splits are sharded at 50 event groups.
+The test suite verifies that:
 
-## Operational resilience
+- positives and negatives originate from the same quarter-hour grid;
+- the entry benchmark is the interval open rather than the future interval low;
+- incomplete eight-hour forward windows are excluded;
+- negative candidates do not require selective one-minute fetching;
+- overlapping positive windows are merged only for data-fetch efficiency;
+- chronological split boundaries include an eight-hour embargo;
+- subject evidence views exclude the decision interval and all later bars;
+- export attempts use unique Supabase Storage prefixes.
 
-- Interrupted scans resume after the last processed symbol.
-- Interrupted control/evidence jobs restart cleanly.
-- Partial local evidence directories are removed before rebuilding.
-- Every raw-evidence rebuild removes and verifies deletion of stale Supabase objects under its job prefix.
-- Every attempt uses a unique Storage subfolder.
-- Uploaded object existence and byte size are verified before the local ZIP is deleted.
-- A TUS 409 is retried only if the server offset has advanced; an unchanged conflict fails immediately with a clear error.
-- ZIP64 is enabled.
-- Files above 6 MB use Supabase TUS resumable uploads in fixed 6 MB chunks.
-- Each local shard and archive is deleted immediately after verified durable upload, preventing 20 GB Render-disk accumulation.
-- Large private downloads stream through the web service instead of loading wholly into RAM.
+## Operational tests
 
-## Automated verification
+The suite also verifies:
 
-- Python compilation: passed.
-- Automated tests: 21 passed.
-- ZIP integrity: passed.
-- Tests cover event detection, candidate detection, saleability, symbol preference, opaque Supabase secrets, resumable uploads, 409 conflict handling, recursive Storage listing, verified prefix deletion, persisted-size verification, unique attempt prefixes, neutral controls, point-in-time cutoffs, gap detection, chronological splitting and normalised SQLite construction.
+- new `sb_secret_…` keys are sent as both API key and bearer credential;
+- legacy service-role JWTs remain compatible;
+- files over 6 MB use the direct Supabase Storage hostname and TUS;
+- stale nested attempt folders are recursively listed and deleted;
+- uploaded object size is verified;
+- a TUS 409 without server-side offset progress fails immediately.
 
-## Failure corrections
+## Remaining validation required in production
 
-### v1.1.1 disk exhaustion
-
-The v1.1.0 exporter retained all completed local packages until the job ended. At 3,087 events this exhausted the 20 GB Render disk. v1.1.1 corrected this by deleting each local package after upload.
-
-### v1.1.2 stale-object collision
-
-The first v1.1.1 retry deleted database file records but left three old Supabase Storage objects. Reusing the same object path caused TUS finalisation to return `409 Conflict` and Postgres to report the `bucketid_objname` unique constraint. v1.1.2 removes and verifies all stale objects before rebuilding and writes the new run to a unique attempt prefix.
+The first five-symbol proof run must confirm Binance request behaviour, live Supabase writes, full export construction and Render disk stability. No local test can prove third-party service availability or historical data completeness.

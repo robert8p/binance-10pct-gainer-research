@@ -1,96 +1,125 @@
 create extension if not exists pgcrypto;
 
-create table if not exists binance10_scan_jobs (
+-- v1.2 uses new tables so the superseded v1.0/v1.1 research remains isolated as an audit trail.
+create table if not exists binance10_grid_jobs (
   id uuid primary key default gen_random_uuid(),
   status text not null check (status in ('queued','running','completed','completed_with_warnings','failed')),
-  created_at timestamptz not null default now(), started_at timestamptz, completed_at timestamptz, heartbeat_at timestamptz,
-  window_start_date date not null, window_end_date_exclusive date not null, lookback_days integer not null default 60,
-  threshold_pct numeric not null default 10 check (threshold_pct = 10),
-  window_minutes integer not null default 480 check (window_minutes = 480),
-  cooldown_minutes integer not null default 480 check (cooldown_minutes >= 480),
+  created_at timestamptz not null default now(),
+  started_at timestamptz,
+  completed_at timestamptz,
+  heartbeat_at timestamptz,
+  window_start_date date not null,
+  window_end_date_exclusive date not null,
+  lookback_days integer not null default 60,
+  cadence_minutes integer not null default 15 check (cadence_minutes=15),
+  threshold_pct numeric not null default 10 check (threshold_pct=10),
+  horizon_minutes integer not null default 480 check (horizon_minutes=480),
+  entry_liquidity_minutes integer not null default 15 check (entry_liquidity_minutes=15),
+  exit_liquidity_minutes integer not null default 5 check (exit_liquidity_minutes=5),
+  min_entry_notional numeric not null default 500 check (min_entry_notional>=0),
+  min_exit_notional numeric not null default 500 check (min_exit_notional>=0),
   quote_assets jsonb not null default '["USDT","USDC","FDUSD"]'::jsonb,
-  min_exit_notional numeric not null default 500 check (min_exit_notional >= 0),
-  saleability_seconds integer not null default 300 check (saleability_seconds = 300),
-  event_definition_version text not null default 'binance10_v1_rolling_8h',
-  symbols_total integer not null default 0, symbols_processed integer not null default 0,
-  events_found integer not null default 0, saleable_events integer not null default 0, failures integer not null default 0,
-  result_json jsonb, error_message text,
+  protocol_version text not null default 'binance10_v1_2_executable_grid',
+  split_boundaries_json jsonb,
+  symbols_total integer not null default 0,
+  symbols_processed integer not null default 0,
+  candidates_total bigint not null default 0,
+  target_reached_count bigint not null default 0,
+  actionable_count bigint not null default 0,
+  failures integer not null default 0,
+  result_json jsonb,
+  error_message text,
   check (window_start_date < window_end_date_exclusive)
 );
 
-create table if not exists binance10_events (
-  id uuid primary key default gen_random_uuid(), scan_job_id uuid not null references binance10_scan_jobs(id) on delete cascade,
-  event_key text not null, symbol text not null, base_asset text not null, quote_asset text not null,
-  baseline_time timestamptz not null, baseline_price numeric not null, crossing_time timestamptz not null,
-  crossing_bar_open numeric not null, crossing_bar_high numeric not null, threshold_price numeric not null,
-  gain_pct numeric not null, minutes_to_cross integer not null,
-  exit_quote_notional numeric not null, exit_trade_count integer not null,
-  saleability_source text not null, saleable boolean not null, created_at timestamptz not null default now(),
-  unique(scan_job_id,event_key)
+create table if not exists binance10_candidates (
+  id uuid primary key default gen_random_uuid(),
+  grid_job_id uuid not null references binance10_grid_jobs(id) on delete cascade,
+  candidate_key text not null,
+  symbol text not null,
+  base_asset text not null,
+  quote_asset text not null,
+  decision_time timestamptz not null,
+  split text not null check (split in ('discovery','validation','sealed_test')),
+  entry_price numeric not null,
+  entry_quote_notional numeric not null,
+  entry_trade_count integer not null,
+  entry_liquid boolean not null,
+  target_price numeric not null,
+  target_reached boolean not null,
+  crossing_minute timestamptz,
+  minutes_to_cross integer,
+  max_forward_high numeric not null,
+  max_forward_gain_pct numeric not null,
+  exit_quote_notional numeric not null,
+  exit_trade_count integer not null,
+  exit_liquid boolean not null,
+  liquidity_assessment_complete boolean not null,
+  actionable_10pct boolean not null,
+  label_version text not null,
+  created_at timestamptz not null default now(),
+  unique(grid_job_id,candidate_key)
 );
-create index if not exists idx_binance10_events_scan on binance10_events(scan_job_id,crossing_time);
-create index if not exists idx_binance10_events_symbol on binance10_events(symbol,baseline_time);
+-- Safe upgrade if an early v1.2 prerelease schema was applied.
+alter table binance10_candidates
+  add column if not exists liquidity_assessment_complete boolean not null default false;
 
-create table if not exists binance10_control_jobs (
-  id uuid primary key default gen_random_uuid(), scan_job_id uuid not null references binance10_scan_jobs(id) on delete cascade,
+create index if not exists idx_b10_candidates_job_split_time on binance10_candidates(grid_job_id,split,decision_time);
+create index if not exists idx_b10_candidates_job_symbol_time on binance10_candidates(grid_job_id,symbol,decision_time);
+create index if not exists idx_b10_candidates_outcome on binance10_candidates(grid_job_id,actionable_10pct,target_reached);
+
+create table if not exists binance10_export_jobs (
+  id uuid primary key default gen_random_uuid(),
+  grid_job_id uuid not null references binance10_grid_jobs(id) on delete cascade,
   status text not null check (status in ('queued','running','completed','completed_with_warnings','failed')),
-  created_at timestamptz not null default now(), started_at timestamptz, completed_at timestamptz, heartbeat_at timestamptz,
-  controls_per_event integer not null default 5 check (controls_per_event between 1 and 10), prior_days integer not null default 10 check (prior_days=10),
-  events_processed integer not null default 0, controls_created integer not null default 0, failures integer not null default 0,
+  created_at timestamptz not null default now(),
+  started_at timestamptz,
+  completed_at timestamptz,
+  heartbeat_at timestamptz,
+  prior_days integer not null default 10 check (prior_days=10),
+  high_res_hours integer not null default 48 check (high_res_hours=48),
+  symbols_per_shard integer not null default 8 check (symbols_per_shard between 1 and 25),
+  protocol_version text not null default 'binance10_v1_2_executable_grid',
+  symbols_processed integer not null default 0,
+  files_created integer not null default 0,
+  raw_bar_rows bigint not null default 0,
+  failures integer not null default 0,
+  result_json jsonb,
   error_message text
 );
 
-create table if not exists binance10_controls (
-  id uuid primary key default gen_random_uuid(), control_job_id uuid not null references binance10_control_jobs(id) on delete cascade,
-  event_id uuid not null references binance10_events(id) on delete cascade, symbol text not null,
-  pseudo_baseline_time timestamptz not null, match_rank integer not null, match_score numeric not null,
-  match_basis text, same_weekday boolean, calendar_distance_days integer,
+create table if not exists binance10_grid_files (
+  id uuid primary key default gen_random_uuid(),
+  export_job_id uuid not null references binance10_export_jobs(id) on delete cascade,
+  storage_path text not null,
+  filename text not null,
+  size_bytes bigint not null,
+  sha256 text not null,
+  content_type text not null,
+  role text not null,
+  split text check (split is null or split in ('discovery','validation','sealed_test')),
   created_at timestamptz not null default now(),
-  unique(control_job_id,event_id,pseudo_baseline_time)
+  unique(export_job_id,storage_path)
 );
-create index if not exists idx_binance10_controls_job on binance10_controls(control_job_id,event_id);
+create index if not exists idx_b10_grid_files_job_split on binance10_grid_files(export_job_id,split,filename);
 
-create table if not exists binance10_context_jobs (
-  id uuid primary key default gen_random_uuid(), control_job_id uuid not null references binance10_control_jobs(id) on delete cascade,
-  status text not null check (status in ('queued','running','completed','completed_with_warnings','failed')),
-  created_at timestamptz not null default now(), started_at timestamptz, completed_at timestamptz, heartbeat_at timestamptz,
-  prior_days integer not null default 10 check (prior_days=10), protocol_version text not null,
-  events_processed integer not null default 0, samples_total integer not null default 0, feature_rows integer not null default 0,
-  raw_bar_rows bigint not null default 0, failures integer not null default 0, result_json jsonb, error_message text
-);
-
-
-
--- Safe upgrades for projects initially created with v1.0.x.
-alter table binance10_controls add column if not exists match_basis text;
-alter table binance10_controls add column if not exists same_weekday boolean;
-alter table binance10_controls add column if not exists calendar_distance_days integer;
-alter table binance10_context_jobs add column if not exists raw_bar_rows bigint not null default 0;
-
-create table if not exists binance10_files (
-  id uuid primary key default gen_random_uuid(), context_job_id uuid not null references binance10_context_jobs(id) on delete cascade,
-  storage_path text not null, filename text not null, size_bytes bigint not null, sha256 text not null,
-  content_type text not null, role text not null, created_at timestamptz not null default now(),
-  unique(context_job_id,storage_path)
-);
-
-create table if not exists binance10_issues (
+create table if not exists binance10_grid_issues (
   id bigint generated always as identity primary key,
-  scan_job_id uuid references binance10_scan_jobs(id) on delete cascade,
-  control_job_id uuid references binance10_control_jobs(id) on delete cascade,
-  context_job_id uuid references binance10_context_jobs(id) on delete cascade,
-  symbol text, stage text not null, message text not null, created_at timestamptz not null default now()
+  grid_job_id uuid references binance10_grid_jobs(id) on delete cascade,
+  export_job_id uuid references binance10_export_jobs(id) on delete cascade,
+  symbol text,
+  stage text not null,
+  message text not null,
+  created_at timestamptz not null default now()
 );
 
-alter table binance10_scan_jobs enable row level security;
-alter table binance10_events enable row level security;
-alter table binance10_control_jobs enable row level security;
-alter table binance10_controls enable row level security;
-alter table binance10_context_jobs enable row level security;
-alter table binance10_files enable row level security;
-alter table binance10_issues enable row level security;
+alter table binance10_grid_jobs enable row level security;
+alter table binance10_candidates enable row level security;
+alter table binance10_export_jobs enable row level security;
+alter table binance10_grid_files enable row level security;
+alter table binance10_grid_issues enable row level security;
 
 insert into storage.buckets(id,name,public)
 values ('binance10-research','binance10-research',false)
 on conflict (id) do update set public=false;
--- No anonymous policies are created. The app uses the server-side Supabase secret key only.
+-- No anonymous policies. The app uses SUPABASE_SECRET_KEY on trusted Render services only.
