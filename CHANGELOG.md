@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.2 — collision-safe raw-evidence retries
+
+- Deletes every stale Supabase Storage object beneath the context-job prefix before a raw-evidence rebuild starts.
+- Verifies the prefix is empty before downloading and packaging hundreds of millions of bar references.
+- Writes each retry to a unique `attempt_<uuid>` Storage folder, so an earlier failed attempt cannot collide with a new filename.
+- Verifies every uploaded object exists in Supabase and has the exact expected byte size before registering it or deleting the local copy.
+- Treats a TUS `409 Conflict` as fatal unless the server upload offset has genuinely advanced; it no longer repeats the same conflicting PATCH five times.
+- Retains the bounded-disk behaviour introduced in v1.1.1.
+
 ## 1.1.1 — bounded-disk evidence finalisation
 
 - Deletes each local uncompressed shard and ZIP immediately after its successful Supabase upload.
@@ -7,7 +16,7 @@
 - Streams SHA-256 calculation so multi-GB ZIPs are not loaded fully into memory.
 - Removes the finished job directory after the index upload.
 
-## v1.1.0 — ChatGPT-owned pattern discovery
+## 1.1.0 — ChatGPT-owned pattern discovery
 
 - Removed application-generated precursor features.
 - Removed return, volatility and volume-based control matching.

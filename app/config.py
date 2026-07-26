@@ -12,7 +12,7 @@ def _csv(name: str, default: str) -> tuple[str, ...]:
 
 @dataclass(frozen=True)
 class Settings:
-    app_version: str = os.getenv('APP_VERSION', '1.1.1')
+    app_version: str = os.getenv('APP_VERSION', '1.1.2')
     database_url: str = os.getenv('DATABASE_URL', '')
     supabase_url: str = os.getenv('SUPABASE_URL', '').rstrip('/')
     supabase_secret_key: str = os.getenv('SUPABASE_SECRET_KEY', '') or os.getenv('SUPABASE_SERVICE_ROLE_KEY', '')

@@ -76,3 +76,23 @@ def test_uploaded_local_package_cleanup_removes_shard_and_archive(tmp_path):
 
     assert not folder.exists()
     assert not archive.exists()
+
+
+def test_builder_uses_attempt_specific_storage_prefix(tmp_path):
+    from app.config import Settings
+    from app.exporter import RawEvidencePackageBuilder
+
+    events = [{'id': 'e1', 'baseline_time': '2026-01-01T00:00:00+00:00'}]
+    builder = RawEvidencePackageBuilder(
+        Settings(temp_data_dir=tmp_path),
+        'job-1',
+        events,
+        {'protocol_version': 'test'},
+    )
+    try:
+        assert builder.storage_prefix.startswith('raw-evidence/job-1/attempt_')
+        assert builder.metadata['export_attempt_id']
+        assert builder.metadata['storage_prefix'] == builder.storage_prefix
+    finally:
+        for shard in builder.shards.values():
+            shard.conn.close()

@@ -1,4 +1,4 @@
-# Binance 10% Gainer Research App — v1.1.1
+# Binance 10% Gainer Research App — v1.1.2
 
 A read-only Binance Spot evidence pipeline for investigating **saleable 10% rises within eight hours**.
 
@@ -88,6 +88,16 @@ Evidence is split chronologically by event group: 60% discovery, 20% validation 
 See `DEPLOYMENT_GUIDE.md` for deployment and upgrade steps.
 
 
-## v1.1.1 retry note
 
-Do not retry a failed v1.1.0 raw-evidence job until both Render services are running v1.1.1. Retrying the same context job automatically removes its stale local job directory before rebuilding. Delete any orphaned v1.1.0 objects from the Supabase Storage `raw-evidence/<context-job-id>/` folder to avoid storage duplication.
+## v1.1.2 retry protection
+
+A raw-evidence retry now performs a fail-fast Storage preflight before rebuilding:
+
+1. recursively lists every object under `raw-evidence/<context-job-id>/`;
+2. removes all stale objects through the Supabase Storage API;
+3. verifies that the prefix is empty;
+4. creates a new unique `attempt_<uuid>` folder;
+5. uploads each package into that attempt folder;
+6. verifies the persisted Supabase object size before registering the download and deleting the local copy.
+
+A stale object can therefore no longer produce the duplicate-key `409 Conflict` seen when v1.1.1 retried a partially uploaded job. Manual deletion in the Supabase dashboard is not required when the worker is running v1.1.2.

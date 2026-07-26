@@ -1,8 +1,9 @@
 {
   "package": "binance_10pct_gainer_research",
-  "version": "1.1.1",
-  "generated_date": "2026-07-25",
+  "version": "1.1.2",
+  "generated_date": "2026-07-26",
   "research_boundary": "Application collects and quality-checks raw evidence; ChatGPT derives features and identifies patterns.",
+  "retry_safety": "Stale Supabase objects are deleted and verified before each rebuild; every upload attempt uses a unique prefix and persisted-size verification.",
   "file_count_excluding_manifest": 35,
   "files": [
     {
@@ -22,13 +23,13 @@
     },
     {
       "path": "CHANGELOG.md",
-      "size_bytes": 1247,
-      "sha256": "c97f417f8035136893f185087b626cef1451ca5c21b70581951da53a4c17e4e2"
+      "size_bytes": 1999,
+      "sha256": "e9b69bb5569214a4ea87fb99ad5eb0cd68f842e775be668cc29712d88a09eadc"
     },
     {
       "path": "DEPLOYMENT_GUIDE.md",
-      "size_bytes": 5392,
-      "sha256": "c87bfa1a99c85e2dc2ec2aed5d0175db8a02d1eb87cab410bb2b9a6ea7e9ee1d"
+      "size_bytes": 5956,
+      "sha256": "ea86ff7e2804e2c461cc76b27a94976d37ebb977fa88aa87833e66b27b4e2fea"
     },
     {
       "path": "Dockerfile",
@@ -37,18 +38,18 @@
     },
     {
       "path": "QUALITY_REPORT.md",
-      "size_bytes": 2343,
-      "sha256": "d20e27e6660513517980304c1f69b055858ad5f94ab2c2247fdb43b33418ae77"
+      "size_bytes": 3238,
+      "sha256": "1d310f7b32ee7d74b83542c680b57dfa2bcede4618199ae67b7cd947a1ae657e"
     },
     {
       "path": "README.md",
-      "size_bytes": 4851,
-      "sha256": "b537024c38e0dacd129ea0ba02a204f94b40f0c668b3004389db73084a0c3224"
+      "size_bytes": 5224,
+      "sha256": "dcf722d875fcc4472c7ac0012e63480c8953c619aabbeaff27facc5f07e5ce3e"
     },
     {
       "path": "SOURCE_NOTES.md",
-      "size_bytes": 671,
-      "sha256": "76d8eff570c99f03070ade76484aec94758b2211983824853f67018e54e1308c"
+      "size_bytes": 971,
+      "sha256": "cbc213069e85b74d1f288af42a693ee9d2d6eab71990614c20fd26ad5ed3dcf3"
     },
     {
       "path": "app/__init__.py",
@@ -63,7 +64,7 @@
     {
       "path": "app/config.py",
       "size_bytes": 1631,
-      "sha256": "e673a71dc4cee5f6a3e423ac7ba814886c83be723de2460dfecbe886032c5c23"
+      "sha256": "4136200ee7a77d0998255f96689b7b7158d58e3e7c765eb26bb39eb8f3756245"
     },
     {
       "path": "app/controls.py",
@@ -77,18 +78,18 @@
     },
     {
       "path": "app/exporter.py",
-      "size_bytes": 23818,
-      "sha256": "244791eea14a3c36d61bca3e144f6c1f17088bd501cd4557697d71b2d3f27b96"
+      "size_bytes": 24158,
+      "sha256": "58546f7c8716eea46b79ba63fe5793ab54587f65eccb9000fac9172d88c06a26"
     },
     {
       "path": "app/jobs.py",
-      "size_bytes": 25753,
-      "sha256": "7b156f1c6e04840b8859e3582d817ff3ebdd2ddac31210baa6fd8be437975761"
+      "size_bytes": 26478,
+      "sha256": "1ad188d279a3e4cba438764f0e33dd197bf1541d304fc59946393c450de5c6da"
     },
     {
       "path": "app/main.py",
       "size_bytes": 7391,
-      "sha256": "2d4e4f09ae612f38e7046615ae8adc22c8b9e68c67fb146610c1b841f3973b86"
+      "sha256": "d8fa8f4d5d4b35abaf3a010ffa881d7bb225dbd9027bc2f2c21d1374826a9288"
     },
     {
       "path": "app/models.py",
@@ -107,8 +108,8 @@
     },
     {
       "path": "app/storage.py",
-      "size_bytes": 7524,
-      "sha256": "b8409591a460bb63017dabd9ff5eca1ae9354740c5664d661d3e9dea7f76f529"
+      "size_bytes": 15345,
+      "sha256": "b93b6f751baeeba9b0b043d444e2fffe175cc664df615b5d32d094730a7037f8"
     },
     {
       "path": "app/templates/index.html",
@@ -123,7 +124,7 @@
     {
       "path": "render.yaml",
       "size_bytes": 962,
-      "sha256": "ff54ad3f5e7e54446f623a9c60e808af70a80137e9e75d7a3b6e4ca594e283ff"
+      "sha256": "4bb23d26afbbaea3421b16add7f7fe1332ce88105ed12d672577240f3f597df2"
     },
     {
       "path": "requirements.txt",
@@ -152,8 +153,8 @@
     },
     {
       "path": "tests/test_exporter.py",
-      "size_bytes": 3272,
-      "sha256": "d3ceef616f7275ef0cfdbfd7c4d138681cd31cee6268dedf7c435023ef0d604d"
+      "size_bytes": 3973,
+      "sha256": "41cd5fcb36843582dc5dd59fa6af7b7518571e3f1373f0466dfe9588c590a5b5"
     },
     {
       "path": "tests/test_raw_evidence.py",
@@ -172,8 +173,8 @@
     },
     {
       "path": "tests/test_storage.py",
-      "size_bytes": 2777,
-      "sha256": "cddbcfc836bf443cf8bbe49742ef339ddc6986545d3a0f83c5987c80a958a7c9"
+      "size_bytes": 6493,
+      "sha256": "7e00ade9cb33daa7f8b80c8f5af0ead4936863b1fb377a7bb44e21ce4c3cce6a"
     },
     {
       "path": "tests/test_symbols.py",

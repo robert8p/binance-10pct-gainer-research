@@ -1,4 +1,4 @@
-# Binance 10% Gainer App v1.1.1 — simple deployment
+# Binance 10% Gainer App v1.1.2 — simple deployment
 
 Deploy this separately from the 50% and 25% applications.
 
@@ -54,19 +54,19 @@ https://YOUR-WEB-SERVICE.onrender.com/health
 Expected:
 
 ```json
-{"status":"ok","version":"1.1.1","event_definition":"10pct_within_8h"}
+{"status":"ok","version":"1.1.2","event_definition":"10pct_within_8h"}
 ```
 
 Open the main URL and use any username plus `ADMIN_PASSWORD` as the password.
 
 ## B. Upgrade from v1.0.0 or v1.0.1
 
-1. Replace the repository contents with this v1.1.1 package and commit the changes.
+1. Replace the repository contents with this v1.1.2 package and commit the changes.
 2. In Supabase SQL Editor, rerun the complete new `supabase/schema.sql`.
    - It safely adds the raw-evidence progress column and neutral-control metadata.
    - Existing scans and events remain intact.
 3. In Render, deploy the latest commit for both services.
-4. Confirm `/health` reports `1.1.1`.
+4. Confirm `/health` reports `1.1.2`.
 5. Do not reuse a completed old feature/context job. Create a new Step 2 control job and Step 3 raw-evidence job so the evidence follows the new neutral protocol.
 
 ## C. Proof scan
@@ -137,14 +137,28 @@ Perform a blank-canvas analysis of the attached Binance 10% raw discovery eviden
 - Each discovery/validation/sealed shard contains at most 50 event groups to keep files manageable.
 - Keep the Render worker disk until all packages have been downloaded and verified.
 
-## Upgrade from v1.1.0 after `No space left on device`
+## Upgrade from v1.1.0 or v1.1.1 after a failed raw-evidence export
 
-1. Suspend the Render worker before changing code.
-2. Replace the GitHub repository contents with v1.1.1 and commit.
-3. Redeploy both the web service and worker; no Supabase schema change is required for this patch.
-4. Confirm `/health` reports `1.1.1`.
-5. Resume the worker if it remains suspended.
-6. Click **Retry** on the failed raw-evidence job. The raw-evidence stage restarts from zero, but the completed scan and neutral-control job are reused.
-7. Do not click Retry until the worker is definitely on v1.1.1.
+1. **Suspend** `binance-10pct-scanner-worker` in Render.
+2. Replace the GitHub repository contents with v1.1.2 and commit.
+3. Deploy the latest commit to both the web service and worker.
+4. No Supabase schema change is required for this patch.
+5. Open `/health` and confirm it reports `1.1.2`.
+6. Resume the worker and wait until it is Live.
+7. Click **Retry once** on the existing failed raw-evidence job.
 
-The same context-job ID and storage paths are reused, so the first three partial discovery objects are overwritten during the retry.
+The retry reuses the completed scan and neutral controls. It restarts raw-evidence construction from zero, but before doing so it automatically removes and verifies deletion of all stale objects under the old context-job Storage prefix. The new files are written under a unique attempt folder, for example:
+
+```text
+raw-evidence/<context-job-id>/attempt_<unique-id>/binance10_discovery_part_001.zip
+```
+
+Do not manually create another control job or raw-evidence job. Do not click Retry repeatedly.
+
+### Expected retry sequence in the worker logs
+
+```text
+Prepared clean raw-evidence storage prefix ... removed 3 stale object(s)
+```
+
+followed later by successful per-part uploads. If Storage cleanup or verification fails, the job stops before rebuilding rather than risking another collision.

@@ -14,7 +14,7 @@ services:
       - key: ADMIN_PASSWORD
         sync: false
       - key: APP_VERSION
-        value: 1.1.1
+        value: 1.1.2
       - key: TEMP_DATA_DIR
         value: /tmp/binance10
   - type: worker
@@ -32,7 +32,7 @@ services:
       - key: ADMIN_PASSWORD
         sync: false
       - key: APP_VERSION
-        value: 1.1.1
+        value: 1.1.2
       - key: TEMP_DATA_DIR
         value: /var/data/binance10
     disk:

@@ -8,13 +8,14 @@ import math
 from pathlib import Path
 import sqlite3
 import shutil
+import uuid
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from .config import Settings
 from .db import connect
 from .models import Kline
 from .raw_evidence import decimal_text, quality_record
-from .storage import upload
+from .storage import upload, verify_upload
 
 UTC = timezone.utc
 EVENT_GROUPS_PER_SHARD = 50
@@ -100,7 +101,9 @@ def _register_upload(
     digest: str,
     role: str,
 ) -> dict[str, object]:
+    expected_size = local_path.stat().st_size
     upload(settings, local_path, storage_path)
+    verify_upload(settings, storage_path, expected_size)
     with connect(settings) as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -110,14 +113,14 @@ def _register_upload(
                 on conflict (context_job_id, storage_path) do update
                   set size_bytes=excluded.size_bytes, sha256=excluded.sha256, role=excluded.role
                 """,
-                (context_job_id, storage_path, local_path.name, local_path.stat().st_size, digest, role),
+                (context_job_id, storage_path, local_path.name, expected_size, digest, role),
             )
         conn.commit()
     return {
         'role': role,
         'filename': local_path.name,
         'storage_path': storage_path,
-        'size_bytes': local_path.stat().st_size,
+        'size_bytes': expected_size,
         'sha256': digest,
     }
 
@@ -333,7 +336,13 @@ class RawEvidencePackageBuilder:
     ) -> None:
         self.settings = settings
         self.context_job_id = context_job_id
-        self.metadata = metadata
+        self.attempt_id = uuid.uuid4().hex
+        self.storage_prefix = f'raw-evidence/{context_job_id}/attempt_{self.attempt_id}'
+        self.metadata = {
+            **metadata,
+            'export_attempt_id': self.attempt_id,
+            'storage_prefix': self.storage_prefix,
+        }
         self.root = settings.temp_data_dir / 'exports' / context_job_id
         if self.root.exists():
             shutil.rmtree(self.root)
@@ -382,7 +391,7 @@ class RawEvidencePackageBuilder:
             filename = _package_filename(split, part, parts_by_split[split])
             zip_path = self.root / filename
             digest = _zip_folder(shard.folder, zip_path)
-            storage_path = f'raw-evidence/{self.context_job_id}/{filename}'
+            storage_path = f'{self.storage_prefix}/{filename}'
             role = split if parts_by_split[split] == 1 else f'{split}_part_{part:03d}'
             record = _register_upload(
                 self.settings, self.context_job_id, zip_path, storage_path, digest, role
@@ -439,7 +448,7 @@ class RawEvidencePackageBuilder:
             self.settings,
             self.context_job_id,
             index_path,
-            f'raw-evidence/{self.context_job_id}/binance10_index.zip',
+            f'{self.storage_prefix}/binance10_index.zip',
             index_digest,
             'index',
         )

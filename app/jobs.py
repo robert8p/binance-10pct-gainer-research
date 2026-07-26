@@ -19,6 +19,7 @@ from .raw_evidence import (
     completed_bars,
 )
 from .scanner import candidate_groups, detect_events_from_minutes, enrich_saleability
+from .storage import delete_prefix
 
 logger = logging.getLogger(__name__)
 UTC = timezone.utc
@@ -345,7 +346,23 @@ def run_context_job(settings: Settings, job: dict) -> None:
     if not all_anchors:
         raise RuntimeError('No saleable events and controls are available for raw evidence export')
 
+    stale_prefix = f'raw-evidence/{job_id}/'
+    deleted_storage_objects = delete_prefix(settings, stale_prefix)
+    with connect(settings) as conn:
+        with conn.cursor() as cur:
+            cur.execute('delete from binance10_files where context_job_id=%s', (job_id,))
+            cur.execute(
+                'update binance10_context_jobs set heartbeat_at=now() where id=%s',
+                (job_id,),
+            )
+        conn.commit()
+    logger.info(
+        'Prepared clean raw-evidence storage prefix for context job %s; removed %s stale object(s)',
+        job_id, len(deleted_storage_objects),
+    )
+
     metadata = {
+        'storage_cleanup_deleted_objects': len(deleted_storage_objects),
         'protocol_version': 'binance10_v1_1_raw_evidence',
         'created_at': datetime.now(tz=UTC).isoformat(),
         'threshold_pct': float(scan['threshold_pct']),

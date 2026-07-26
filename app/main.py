@@ -14,7 +14,7 @@ from .config import get_settings
 from .db import connect, fetch_all, fetch_one
 from .storage import iter_download
 
-app = FastAPI(title='Binance 10% Gainer Research', version='1.1.1')
+app = FastAPI(title='Binance 10% Gainer Research', version='1.1.2')
 templates = Jinja2Templates(directory=str(Path(__file__).parent / 'templates'))
 security = HTTPBasic(auto_error=False)
 
@@ -29,7 +29,7 @@ def auth(credentials: HTTPBasicCredentials | None = Depends(security)) -> None:
 
 @app.get('/health')
 def health() -> dict[str, str]:
-    return {'status':'ok','version':'1.1.1','event_definition':'10pct_within_8h'}
+    return {'status':'ok','version':'1.1.2','event_definition':'10pct_within_8h'}
 
 
 @app.get('/', response_class=HTMLResponse, dependencies=[Depends(auth)])
@@ -40,7 +40,7 @@ def dashboard(request: Request) -> HTMLResponse:
     contexts = fetch_all(settings, 'select * from binance10_context_jobs order by created_at desc limit 30') if settings.configured else []
     files = fetch_all(settings, 'select * from binance10_files order by created_at desc limit 30') if settings.configured else []
     return templates.TemplateResponse(request, 'index.html', {
-        'version':'1.1.1','configured':settings.configured,'scans':scans,'controls':controls,'contexts':contexts,'files':files,
+        'version':'1.1.2','configured':settings.configured,'scans':scans,'controls':controls,'contexts':contexts,'files':files,
     })
 
 
