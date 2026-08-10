@@ -2,7 +2,7 @@ services:
   - type: web
     name: binance-10pct-scanner-web
     runtime: docker
-    plan: starter
+    plan: free
     healthCheckPath: /health
     envVars:
       - key: DATABASE_URL
