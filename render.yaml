@@ -22,6 +22,10 @@ services:
     runtime: docker
     plan: starter
     dockerCommand: python -m app.worker
+    disk:
+      name: binance10-cache
+      mountPath: /var/data
+      sizeGB: 20
     envVars:
       - key: DATABASE_URL
         sync: false
@@ -34,4 +38,4 @@ services:
       - key: APP_VERSION
         value: 1.2.0
       - key: TEMP_DATA_DIR
-        value: /tmp/binance10
+        value: /var/data/binance10
