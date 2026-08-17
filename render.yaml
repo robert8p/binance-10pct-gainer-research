@@ -20,7 +20,7 @@ services:
   - type: worker
     name: binance-10pct-scanner-worker
     runtime: docker
-    plan: pro
+    plan: starter
     dockerCommand: python -m app.worker
     envVars:
       - key: DATABASE_URL
@@ -34,8 +34,4 @@ services:
       - key: APP_VERSION
         value: 1.2.0
       - key: TEMP_DATA_DIR
-        value: /var/data/binance10
-    disk:
-      name: binance10-cache
-      mountPath: /var/data
-      sizeGB: 20
+        value: /tmp/binance10
