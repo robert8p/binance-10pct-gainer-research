@@ -1,41 +1,40 @@
 services:
   - type: web
-    name: binance-10pct-scanner-web
-    runtime: docker
-    plan: free
-    healthCheckPath: /health
+    name: crypto500-scanner-20261112
+    runtime: python
+    repo: https://github.com/robert8p/binance-10pct-gainer-research
+    branch: crypto500-private-scanner-20261112
+    region: frankfurt
+    plan: 0.5c-512mb
+    numInstances: 1
+    autoDeployTrigger: 'off'
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bootstrap.py
+    healthCheckPath: /healthz
+    maxShutdownDelaySeconds: 60
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.14
       - key: DATABASE_URL
-        sync: false
-      - key: SUPABASE_URL
-        sync: false
-      - key: SUPABASE_SECRET_KEY
-        sync: false
-      - key: ADMIN_PASSWORD
-        sync: false
-      - key: APP_VERSION
-        value: 1.2.0
-      - key: TEMP_DATA_DIR
-        value: /tmp/binance10
-  - type: worker
-    name: binance-10pct-scanner-worker
-    runtime: docker
-    plan: starter
-    dockerCommand: python -m app.worker
-    disk:
-      name: binance10-cache
-      mountPath: /var/data
-      sizeGB: 20
-    envVars:
-      - key: DATABASE_URL
-        sync: false
-      - key: SUPABASE_URL
-        sync: false
-      - key: SUPABASE_SECRET_KEY
-        sync: false
-      - key: ADMIN_PASSWORD
-        sync: false
-      - key: APP_VERSION
-        value: 1.2.0
-      - key: TEMP_DATA_DIR
-        value: /var/data/binance10
+        fromDatabase:
+          name: crypto500-ledger-20261112
+          property: connectionString
+      - key: CRYPTO500_API_TOKEN
+        generateValue: true
+      - key: CRYPTO500_BUNDLE_KEY
+        generateValue: true
+      - key: SCANNER_ENABLED
+        value: '1'
+      - key: ALERT_FRESHNESS_SECONDS
+        value: '180'
+      - key: VAPID_SUBJECT
+        value: https://crypto500-live-scanner.robert8p.chatgpt.site
+databases:
+  - name: crypto500-ledger-20261112
+    region: frankfurt
+    plan: 0.1c-256mb
+    diskSizeGB: 1
+    postgresMajorVersion: '18'
+    databaseName: crypto500
+    user: crypto500
+    ipAllowList: []
