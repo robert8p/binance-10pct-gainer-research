@@ -27,6 +27,8 @@ services:
         value: '1'
       - key: ALERT_FRESHNESS_SECONDS
         value: '180'
+      - key: DATABASE_STORAGE_LIMIT_BYTES
+        value: '1073741824'
       - key: VAPID_SUBJECT
         value: https://crypto500-live-scanner.robert8p.chatgpt.site
 databases:

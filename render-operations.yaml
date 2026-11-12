@@ -1,0 +1,63 @@
+# Independent monitor and temporary, strictly read-only PITR verifier.
+# All referenced resources are the isolated Crypto500 resources.
+services:
+  - type: cron
+    name: crypto500-watchdog-20261112
+    runtime: python
+    repo: https://github.com/robert8p/binance-10pct-gainer-research
+    branch: crypto500-private-scanner-20261112
+    region: frankfurt
+    plan: 0.5c-512mb
+    autoDeployTrigger: 'off'
+    schedule: '* * * * *'
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bootstrap.py watchdog --once
+    envVars:
+      - key: PYTHON_VERSION
+        value: '3.12.14'
+      - key: WATCHDOG_SCANNER_URL
+        value: https://crypto500-scanner-20261112-gy2q.onrender.com
+      - key: WATCHDOG_MONITOR_ID
+        value: crypto500-render-independent
+      - key: CRYPTO500_API_TOKEN
+        fromService:
+          type: web
+          name: crypto500-scanner-20261112-gy2q
+          envVarKey: CRYPTO500_API_TOKEN
+      - key: CRYPTO500_BUNDLE_KEY
+        fromService:
+          type: web
+          name: crypto500-scanner-20261112-gy2q
+          envVarKey: CRYPTO500_BUNDLE_KEY
+  - type: web
+    name: crypto500-restore-verifier-20261112
+    runtime: python
+    repo: https://github.com/robert8p/binance-10pct-gainer-research
+    branch: crypto500-private-scanner-20261112
+    region: frankfurt
+    plan: free
+    autoDeployTrigger: 'off'
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bootstrap.py
+    healthCheckPath: /healthz
+    envVars:
+      - key: PYTHON_VERSION
+        value: '3.12.14'
+      - key: BACKUP_READ_ONLY
+        value: '1'
+      - key: SCANNER_ENABLED
+        value: '0'
+      - key: DATABASE_URL
+        fromDatabase:
+          name: crypto500-restore-drill-20261112
+          property: connectionString
+      - key: CRYPTO500_API_TOKEN
+        fromService:
+          type: web
+          name: crypto500-scanner-20261112-gy2q
+          envVarKey: CRYPTO500_API_TOKEN
+      - key: CRYPTO500_BUNDLE_KEY
+        fromService:
+          type: web
+          name: crypto500-scanner-20261112-gy2q
+          envVarKey: CRYPTO500_BUNDLE_KEY
