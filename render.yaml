@@ -5,7 +5,7 @@ services:
     repo: https://github.com/robert8p/binance-10pct-gainer-research
     branch: crypto500-private-scanner-20261112
     region: frankfurt
-    plan: 0.5c-512mb
+    plan: 1c-2g
     numInstances: 1
     autoDeployTrigger: 'off'
     buildCommand: pip install -r requirements.txt
