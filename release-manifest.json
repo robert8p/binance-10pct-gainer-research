@@ -1,7 +1,7 @@
 {
-  "plaintext_sha256": "e72ca7f31180d015d85096b6b0d966df7a826a40787dbcccc72067b1a4d8ceec",
-  "ciphertext_sha256": "f7212f6506e139223d8dbe3064382ddbd3b1f2269f866e245aa698a5a3e86d31",
-  "source_files": 50,
-  "encrypted_bytes": 2966466,
-  "bundle_parts": 99
+  "plaintext_sha256": "b4cc5d501d8906e0f362d4d696184374a018d0a84065f6b7045cf43af06735af",
+  "ciphertext_sha256": "0b45ac23b21db9bbf9d01ed859017fa640da30be09bbf09eb76c09e22e9276bc",
+  "source_files": 59,
+  "encrypted_bytes": 3797345,
+  "bundle_parts": 127
 }
