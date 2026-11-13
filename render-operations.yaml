@@ -11,7 +11,8 @@ services:
     autoDeployTrigger: 'off'
     schedule: '* * * * *'
     buildCommand: pip install -r requirements.txt
-    startCommand: python bootstrap.py watchdog --once
+    startCommand: >-
+      sh -c 'monitor_status=0; for sample in 1 2 3; do python bootstrap.py watchdog --once || monitor_status=$?; if [ "$sample" -lt 3 ]; then sleep 20; fi; done; exit "$monitor_status"'
     envVars:
       - key: PYTHON_VERSION
         value: '3.12.14'
