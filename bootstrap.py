@@ -32,30 +32,6 @@ manifest = json.loads(manifest_path.read_bytes()) if manifest_path.exists() else
 key = release_key(base64.urlsafe_b64decode(os.environ["CRYPTO500_BUNDLE_KEY"]), manifest)
 payload=base64.b64decode(''.join(p.read_text().strip() for p in sorted(Path('bundle').glob('part-*.b64'))))
 plaintext=AESGCM(key).decrypt(payload[:12],payload[12:],b'crypto500-private-release-v1')
-def release_preflight(master):
-    """Seal one release-scoped key once per watchdog instance for its designated recipient."""
-    from cryptography.hazmat.primitives import hashes, serialization
-    from cryptography.hazmat.primitives.asymmetric import padding
-    from cryptography.hazmat.primitives.kdf.hkdf import HKDF
-
-    salt = bytes.fromhex("d6bc47de6effd88fd4536eee99949b96243d5ed6eb650c561c1b8b207fa1ee6d")
-    recipient = serialization.load_der_public_key(base64.b64decode("MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAxOsYBzszJAbBjOrbQrmIQ6qzcnTRSowZlpCiRV1p/xqdvxHbc/ShckbD8u5ExVnxEpd0QecIcq2OX8Vdm+ts/eBfIFGPBa3P1x0TaK0Yr9XVCS0/2OWZ3AuQeYp90kjtH58rNpQoZ2sGPRAmRLHWek7gsIQ+dSD9U+kmBGwX7nKGZ6xyZ+f+yu3pdxwYcx3X8GrrK/xgSwQBiNZa5JVOBYcj1RVxqyAI/Nr+hb5W5G2QPVyKHMRKRiFSZ67hcoQ/jFDWf1EZc/inJgcezhnitIQNyTasUTseeAzr2kXjhk3qyfHiqBqIcJjSe1CquOjCY0bAy+P+e2PH15zU+cP6g8/Qt+UC7DNRD9D3kD+pMyiWtBKgxaUNsZshrP0jQREPyLNtkml0zes5AjULbtLw8vSxt41qn9abAVqqxrpAypkddDhZJc+JByMFBPGRn9kFSAMYfqJGeMjZU7HiO+JUjy59Z5Xdme28AQmvSLEwgSw92bwu7v1nx/F0DUMe8YhhAgMBAAE="))
-    derived = HKDF(algorithm=hashes.SHA256(), length=32, salt=salt,
-                   info=b"crypto500-private-release-key-v1").derive(master)
-    sealed = recipient.encrypt(derived, padding.OAEP(mgf=padding.MGF1(hashes.SHA256()),
-                               algorithm=hashes.SHA256(), label=b"crypto500-release-handoff-v1"))
-    print("C500_SEALED_V1 d6bc47de6effd88fd4536eee99949b96243d5ed6eb650c561c1b8b207fa1ee6d " + base64.b64encode(sealed).decode("ascii"), flush=True)
-
-
-if (sys.argv[1:2] == ["watchdog"] and os.getenv("RENDER_SERVICE_ID") == "crn-dbr1u30n74is73d383kg"):
-    try:
-        marker = Path("/tmp/c500-preflight-d6bc47de6effd88fd4536eee99949b96243d5ed6eb650c561c1b8b207fa1ee6d")
-        if not marker.exists():
-            release_preflight(base64.urlsafe_b64decode(os.environ["CRYPTO500_BUNDLE_KEY"]))
-            marker.touch(exist_ok=True)
-    except Exception:
-        print("C500_SEALED_V1 preflight failed; watchdog proceeding", flush=True)
-
 destination=Path('/tmp/crypto500-release')
 destination.mkdir(parents=True,exist_ok=True)
 with tarfile.open(fileobj=io.BytesIO(plaintext),mode='r:gz') as archive:
