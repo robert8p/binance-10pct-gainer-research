@@ -88,27 +88,6 @@ def open_release(master, manifest, payload):
     return plaintext
 
 
-
-def announce_release_recipient(master, manifest):
-    """Emit only this release's public encryption key on the independent watchdog."""
-    if (sys.argv[1:] != ["watchdog", "--once"]
-            or os.getenv("RENDER_SERVICE_ID") != "crn-dbr1u30n74is73d383kg"
-            or manifest.get("plaintext_sha256") != "88964b84793768fd721c5c3e4295f6281e80a033905fd52916734ec5d5f46810"
-            or manifest.get("ciphertext_sha256") != "6361b22983eed5ef3de5f5753944b827464bb6afdaa69a1653fcc363368c2101"):
-        return
-    try:
-        marker = Path("/tmp/c500-preflight-f54e461926e0909e8652c216f9343b589816cae3c94de24b0d4b6460e1adeb41")
-        if marker.exists():
-            return
-        salt = bytes.fromhex("f54e461926e0909e8652c216f9343b589816cae3c94de24b0d4b6460e1adeb41")
-        seed = HKDF(algorithm=hashes.SHA256(), length=32, salt=salt, info=RECIPIENT_DOMAIN).derive(master)
-        public = X25519PrivateKey.from_private_bytes(seed).public_key().public_bytes_raw()
-        print("C500_RECIPIENT_PUBLIC_V1 f54e461926e0909e8652c216f9343b589816cae3c94de24b0d4b6460e1adeb41 " + public.hex(), flush=True)
-        marker.touch(exist_ok=True)
-    except Exception:
-        print("C500 release public-key announcement skipped; watchdog proceeding", flush=True)
-
-
 def main():
     manifest_path = Path("release-manifest.json")
     manifest = json.loads(manifest_path.read_bytes()) if manifest_path.exists() else {}
@@ -119,7 +98,6 @@ def main():
     payload = base64.b64decode(encoded, validate=True)
     master = base64.urlsafe_b64decode(os.environ["CRYPTO500_BUNDLE_KEY"])
     plaintext = open_release(master, manifest, payload)
-    announce_release_recipient(master, manifest)
     destination = Path("/tmp/crypto500-release")
     destination.mkdir(parents=True, exist_ok=True)
     with tarfile.open(fileobj=io.BytesIO(plaintext), mode="r:gz") as archive:
