@@ -28,14 +28,14 @@ services:
       - key: ALERT_FRESHNESS_SECONDS
         value: '180'
       - key: DATABASE_STORAGE_LIMIT_BYTES
-        value: '10737418240'
+        value: '16106127360'
       - key: VAPID_SUBJECT
         value: https://crypto500-live-scanner.robert8p.chatgpt.site
 databases:
   - name: crypto500-ledger-20261112
     region: frankfurt
     plan: 0.1c-256mb
-    diskSizeGB: 10
+    diskSizeGB: 15
     postgresMajorVersion: '18'
     databaseName: crypto500
     user: crypto500
