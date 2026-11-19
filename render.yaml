@@ -34,7 +34,7 @@ services:
 databases:
   - name: crypto500-ledger-20261112
     region: frankfurt
-    plan: 0.1c-256mb
+    plan: 1c-2g
     diskSizeGB: 15
     postgresMajorVersion: '18'
     databaseName: crypto500
