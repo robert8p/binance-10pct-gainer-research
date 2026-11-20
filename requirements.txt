@@ -6,3 +6,4 @@ pandas==2.2.3
 cryptography==50.0.0
 psycopg[binary]==3.3.9
 pywebpush==2.5.0
+zstandard==0.25.0
