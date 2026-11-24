@@ -19,6 +19,13 @@ LEGACY_AAD = b"crypto500-private-release-v1"
 PUBLIC_CARRIER = "HPKE-X25519-HKDF-SHA256-AES256GCM-v1"
 RECIPIENT_DOMAIN = b"crypto500/release-recipient/x25519/v1"
 CARRIER_DOMAIN = b"crypto500/release-carrier/hpke/v1\x00"
+# This existing recipient was provisioned with its original derivation salt.
+# Envelope salts authenticate each ciphertext context; changing them must not
+# silently select a different deployment recipient for the same public key.
+PINNED_RECIPIENT_SALTS = {
+    "e0cfa95879d20995655ad30f450d9438df0724d4a33f2b506d1dd4cadf15bf35":
+        "e25099c1029a78affb2b0e6f047cce4ac5d30607d9c942a11d72651861a8b971",
+}
 SUITE = hpke.Suite(hpke.KEM.X25519, hpke.KDF.HKDF_SHA256, hpke.AEAD.AES_256_GCM)
 
 
@@ -76,7 +83,8 @@ def open_release(master, manifest, payload):
     salt, public, info = public_envelope(spec)
     if len(master) != 32:
         raise ValueError("Invalid deployment key length")
-    seed = HKDF(algorithm=hashes.SHA256(), length=32, salt=salt, info=RECIPIENT_DOMAIN).derive(master)
+    recipient_salt = bytes.fromhex(PINNED_RECIPIENT_SALTS.get(public.hex(), salt.hex()))
+    seed = HKDF(algorithm=hashes.SHA256(), length=32, salt=recipient_salt, info=RECIPIENT_DOMAIN).derive(master)
     recipient = X25519PrivateKey.from_private_bytes(seed)
     if recipient.public_key().public_bytes_raw() != public:
         raise ValueError("Envelope recipient does not match this deployment")
