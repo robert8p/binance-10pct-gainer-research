@@ -1,8 +1,8 @@
 {
-  "plaintext_sha256": "923466472ff1a988b893d3c189eccc3f52d65f5fc0ca31c212b67e34d1fa8166",
-  "ciphertext_sha256": "7649b283ec5188db78f3c06f6e228dfbcbf720eac7a1d988d0950cc590678448",
+  "plaintext_sha256": "3fa902c6114795a160bb7a654f233bcf963703d9b9a55fa9b343dcbf55d20394",
+  "ciphertext_sha256": "87d586e25f77d94ce59a9f9ffacf67bbb3668aa2f0d3b4518c22430d8c0afab5",
   "source_files": 375,
-  "encrypted_bytes": 33623649,
+  "encrypted_bytes": 33625177,
   "bundle_parts": 1121,
   "key_derivation": {
     "algorithm": "HPKE-X25519-HKDF-SHA256-AES256GCM-v1",
