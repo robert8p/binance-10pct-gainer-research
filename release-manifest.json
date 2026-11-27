@@ -1,12 +1,12 @@
 {
-  "plaintext_sha256": "19344196f6c13cb2735284175b7d74ad61541241c8fa621d8522c1b04b830619",
-  "ciphertext_sha256": "6b96cef4d8abfa0149a2862639d5582e2cf9b89eb375b4195211edcc07988f2e",
-  "source_files": 463,
-  "encrypted_bytes": 42826435,
+  "plaintext_sha256": "acccf39e949457f8b2334e893134f3362df1ad29138b0a142406a9c5380a6bc5",
+  "ciphertext_sha256": "e2ddd8d445f37efa44934239034a99ad90d891c711be2b1a37fa919e6640da93",
+  "source_files": 465,
+  "encrypted_bytes": 42834184,
   "bundle_parts": 1428,
   "key_derivation": {
     "algorithm": "HPKE-X25519-HKDF-SHA256-AES256GCM-v1",
-    "salt_hex": "c9738b8df1c5b822c3aac75d30313d8786f7058422c814d5471d0afa67fc90c3",
+    "salt_hex": "dca516623ec38ccd0493307c16d45465f26d74460493b2ba6effb94bc0fefbbb",
     "recipient_public_hex": "e0cfa95879d20995655ad30f450d9438df0724d4a33f2b506d1dd4cadf15bf35"
   }
 }
